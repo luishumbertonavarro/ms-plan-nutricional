@@ -1,0 +1,34 @@
+
+# Base de datos exclusiva de ms-plan-nutricional.
+# La API se corre en el host con: uv run fastapi dev main.py
+#
+# Levantar BD:
+#   docker compose -f ms-plan-nutricional-docker-compose.yml up -d
+#
+# Detener BD:
+#   docker compose -f ms-plan-nutricional-docker-compose.yml down
+
+services:
+  plan_nutricional_db:
+    image: postgres:15
+    container_name: plan_nutricional_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: db_plan_nutricional
+    ports:
+      - "5434:5432"   # 5434 en el host — no colisiona con catering_db (5433) ni con nurtricenter_db (5432)
+    volumes:
+      - plan_nutricional_postgres_data:/var/lib/postgresql/data
+      - ./bd-ms-plan-nutricional.sql:/docker-entrypoint-initdb.d/bd-ms-plan-nutricional.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d db_plan_nutricional"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  plan_nutricional_postgres_data:
+    name: plan_nutricional_postgres_data
+    driver: local

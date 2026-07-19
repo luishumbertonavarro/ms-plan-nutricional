@@ -1,0 +1,49 @@
+from plan_nutricional.domain.exceptions.catalogo_exceptions import (
+    RecetaCatalogoInactivaError,
+    RecetaCatalogoNoEncontradaError,
+)
+from plan_nutricional.domain.exceptions.plan_exceptions import (
+    DiaDuplicadoError,
+    DiaFueraDeDuracionError,
+    DiaNoEncontradoError,
+    PlanNoEncontradoError,
+    PlanNoModificableError,
+    PlanNutricionalDomainError,
+    RecetaDuplicadaError,
+    RecetaNoEncontradaError,
+    TiempoComidaDuplicadoError,
+    TiempoComidaNoEncontradoError,
+    TransicionEstadoInvalidaError,
+)
+from plan_nutricional.domain.exceptions.plantilla_exceptions import (
+    PlantillaDiaDuplicadoError,
+    PlantillaDiaFueraDeDuracionError,
+    PlantillaDiaNoEncontradoError,
+    PlantillaNoEncontradaError,
+    PlantillaRecetaNoEncontradaError,
+    PlantillaTiempoComidaDuplicadoError,
+    PlantillaTiempoComidaNoEncontradoError,
+)
+
+__all__ = [
+    "DiaDuplicadoError",
+    "DiaFueraDeDuracionError",
+    "DiaNoEncontradoError",
+    "PlanNoEncontradoError",
+    "PlanNoModificableError",
+    "PlanNutricionalDomainError",
+    "PlantillaDiaDuplicadoError",
+    "PlantillaDiaFueraDeDuracionError",
+    "PlantillaDiaNoEncontradoError",
+    "PlantillaNoEncontradaError",
+    "PlantillaRecetaNoEncontradaError",
+    "PlantillaTiempoComidaDuplicadoError",
+    "PlantillaTiempoComidaNoEncontradoError",
+    "RecetaCatalogoInactivaError",
+    "RecetaCatalogoNoEncontradaError",
+    "RecetaDuplicadaError",
+    "RecetaNoEncontradaError",
+    "TiempoComidaDuplicadoError",
+    "TiempoComidaNoEncontradoError",
+    "TransicionEstadoInvalidaError",
+]
