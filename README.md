@@ -369,6 +369,39 @@ docker exec -it plan_nutricional_db psql -U postgres -d db_plan_nutricional
 
 ---
 
+## Pruebas y Cobertura
+
+> La suite **no requiere PostgreSQL**: los repositorios se sustituyen por mocks,
+> de modo que las pruebas se ejecutan aisladas de la infraestructura.
+
+```bash
+# Instalar dependencias (incluye el grupo dev: pytest, pytest-asyncio, pytest-cov)
+uv sync
+
+# Ejecutar toda la suite
+uv run pytest -q
+
+# Ejecutar con medición de cobertura (terminal + reporte HTML en htmlcov/)
+uv run pytest --cov --cov-report=term-missing --cov-report=html
+```
+
+| Alcance | Detalle |
+|---|---|
+| Capa de Dominio | 115 tests — Value Objects, invariantes de los agregados, ciclo de vida del plan |
+| Capa de Aplicación | 28 tests — casos de uso con **mocks** de los repositorios (`AsyncMock(spec=...)`) |
+| Cobertura | 82 % del alcance medido (dominio y aplicación) |
+| Fuera de alcance | `infrastructure/` y `presentation/`, excluidos de la cobertura en `pyproject.toml` |
+
+El repositorio incluye además un entorno de pruebas asistido por IA: el subagente
+`.claude/agents/test-writer.md` y la skill
+`.claude/skills/testing-plan-nutricional/SKILL.md`, que fijan las convenciones y
+obligan a ejecutar la suite antes de dar por bueno cualquier test generado.
+
+Ver **[tests/README.md](tests/README.md)** para el detalle: qué es un mock y cómo
+se usa aquí, el patrón AAA, el inventario completo de la suite y los hallazgos.
+
+---
+
 ## Estado Actual
 
 | Componente | Estado |
@@ -376,6 +409,7 @@ docker exec -it plan_nutricional_db psql -U postgres -d db_plan_nutricional
 | Capa de Dominio (AR, Entidades, VOs, Excepciones) | Completo — incluye `PlanNutricional`, `RecetaCatalogo` y `PlantillaPlan` |
 | Interfaces de Repositorio y Gateway | Completo |
 | Capa de Aplicación (casos de uso, queries) | Completo |
+| Pruebas unitarias | 143 tests (dominio + casos de uso) · 82 % de cobertura · `pytest` + `unittest.mock` |
 | API REST (FastAPI, endpoints, schemas) | Completo — `/planes`, `/catalogo-recetas`, `/plantillas` |
 | Persistencia | PostgreSQL 16 vía SQLAlchemy async (activo) |
 | Mensajería | Pendiente |
@@ -394,3 +428,4 @@ docker exec -it plan_nutricional_db psql -U postgres -d db_plan_nutricional
 | Validación | Pydantic v2 |
 | Contenedores | Docker + Docker Compose |
 | Dependencias | `uv` con `pyproject.toml` |
+| Pruebas | pytest + pytest-asyncio + pytest-cov · mocks con `unittest.mock.AsyncMock` |
