@@ -5,4 +5,8 @@ __pycache__/
 dist/
 build/
 .pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
 .env
+.claude/settings.local.json
