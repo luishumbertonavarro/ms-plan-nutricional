@@ -1,35 +1,48 @@
 # Pruebas — ms-plan-nutricional
 
-Suite de **pruebas unitarias** del BC3 – Planificación Nutricional, aplicando el
-taller de Unit Tests al caso de estudio del proyecto final.
+Suite de pruebas del BC3 – Planificación Nutricional. Recoge dos talleres
+aplicados al caso de estudio del proyecto final:
 
-**143 tests · 82 % de cobertura · sin base de datos.**
+- **Taller de Unit Tests** → `tests/unit/` — 143 tests, sin base de datos.
+- **Taller de Integration Tests** → `tests/integration/` — 21 tests contra la API
+  y PostgreSQL reales, más 13 que validan el propio entorno
+  (ver [sección 10](#10-pruebas-de-integración)).
+
+**177 tests · 79 % de cobertura.**
 
 ---
 
 ## 1. Qué se prueba y qué no
 
-| Capa | ¿Se prueba? | Por qué |
+| Capa | Pruebas unitarias | Pruebas de integración |
 |---|---|---|
-| `domain/` | **Sí** — 115 tests | Modelo puro, sin I/O: se prueba con objetos reales |
-| `application/use_cases/` | **Sí** — 28 tests | Orquestación: los repositorios se sustituyen por mocks |
-| `infrastructure/` | No | Requiere PostgreSQL — fuera del alcance de este avance |
-| `presentation/` | No | Serían pruebas de integración de la API — fuera del alcance |
+| `domain/` | **Sí** — 115 tests, con objetos reales | Indirectamente, a través de la API |
+| `application/use_cases/` | **Sí** — 28 tests, repositorios mockeados | Indirectamente, a través de la API |
+| `infrastructure/` | No — requiere PostgreSQL | **Sí** — mapeo ORM ↔ dominio y `commit`/`rollback` |
+| `presentation/` | No — es la frontera HTTP | **Sí** — routers, `Depends` y manejadores de excepción |
 
-Las dos últimas están excluidas de la medición de cobertura en `pyproject.toml`
-(`[tool.coverage.run] omit`), para que el porcentaje refleje lo que realmente se
-probó y no se diluya con capas no cubiertas.
+La división es deliberada: **cada capa se prueba con la herramienta que le
+corresponde.** Las reglas de negocio se verifican una sola vez, en las unitarias,
+donde son rápidas de escribir y de ejecutar; las de integración no las repiten,
+sino que comprueban el *cableado* entre capas, que es justo lo que un mock oculta.
+
+Desde el taller de integración, `infrastructure/` y `presentation/` **ya no están
+excluidas** de la medición de cobertura en `pyproject.toml`.
 
 ---
 
 ## 2. Cómo ejecutar
 
 ```bash
-# Instalar dependencias (incluye el grupo dev: pytest, pytest-asyncio, pytest-cov)
+# Instalar dependencias (incluye el grupo dev: pytest, pytest-asyncio, pytest-cov, httpx)
 uv sync
 
-# Toda la suite
+# Toda la suite (unitarias + integración)
 uv run pytest -q
+
+# Solo unitarias / solo integración
+uv run pytest tests/unit -q
+uv run pytest tests/integration -v
 
 # Solo dominio / solo casos de uso
 uv run pytest tests/unit/domain -q
@@ -42,9 +55,13 @@ uv run pytest tests/unit/domain/test_plan_nutricional.py -v
 uv run pytest -k "duplicado" -v
 ```
 
-> **No hace falta levantar PostgreSQL.** Si la suite pasa con la base de datos
-> apagada, es la prueba de que los dobles aíslan correctamente el dominio de la
-> infraestructura.
+> **Las unitarias no necesitan PostgreSQL.** Si `uv run pytest tests/unit` pasa
+> con la base de datos apagada, es la prueba de que los dobles aíslan
+> correctamente el dominio de la infraestructura.
+>
+> **Las de integración sí lo necesitan**, pero no rompen la suite si falta: se
+> marcan como `skipped`. Con la base apagada, `uv run pytest` reporta
+> `156 passed, 21 skipped`.
 
 ### Cobertura
 
@@ -73,21 +90,30 @@ cada módulo de producción hay un archivo de test en la misma posición relativ
 ```
 tests/
 ├── conftest.py                 # fixtures compartidas (builders + mocks)
-└── unit/
-    ├── domain/                 # espeja src/plan_nutricional/domain/model/
-    │   ├── test_value_objects.py
-    │   ├── test_plan_nutricional.py
-    │   ├── test_plan_dia.py
-    │   ├── test_tiempo_comida.py
-    │   ├── test_receta_catalogo.py
-    │   └── test_plantilla_plan.py
-    └── application/            # espeja src/plan_nutricional/application/use_cases/
-        ├── test_crear_plan.py
-        ├── test_agregar_dia.py
-        ├── test_cambiar_estado_plan.py
-        ├── test_agregar_receta_desde_catalogo.py
-        └── test_crear_plan_desde_plantilla.py
+├── unit/
+│   ├── domain/                 # espeja src/plan_nutricional/domain/model/
+│   │   ├── test_value_objects.py
+│   │   ├── test_plan_nutricional.py
+│   │   ├── test_plan_dia.py
+│   │   ├── test_tiempo_comida.py
+│   │   ├── test_receta_catalogo.py
+│   │   └── test_plantilla_plan.py
+│   └── application/            # espeja src/plan_nutricional/application/use_cases/
+│       ├── test_crear_plan.py
+│       ├── test_agregar_dia.py
+│       ├── test_cambiar_estado_plan.py
+│       ├── test_agregar_receta_desde_catalogo.py
+│       └── test_crear_plan_desde_plantilla.py
+└── integration/                # no espeja src/: se organiza por flujo, no por capa
+    ├── conftest.py             # motor, transacción reversible y cliente HTTP
+    ├── test_planes_api_flujo_correcto.py
+    ├── test_planes_api_flujo_incorrecto.py
+    └── test_convenciones_del_entorno.py   # guardián de las reglas (sección 9)
 ```
+
+`tests/integration/` **no espeja la estructura de `src/`**, y es a propósito: una
+prueba de integración no corresponde a un módulo, sino a un *recorrido* que
+atraviesa varios. Por eso se organiza por flujo (correcto / incorrecto).
 
 `conftest.py` centraliza lo que se repetiría en cada test:
 
@@ -248,24 +274,42 @@ completa de transiciones de estado (7 combinaciones inválidas) en un solo test.
 | `unit/application/test_crear_plan_desde_plantilla.py` | 6 | Tres mocks, `side_effect`, `assert_has_awaits` |
 | `unit/application/test_agregar_dia.py` | 5 | Patrón de referencia de mocking |
 | `unit/application/test_cambiar_estado_plan.py` | 5 | Transiciones inválidas sin persistencia parcial |
-| **Total** | **143** | |
+| **Subtotal unitarias** | **143** | |
+| `integration/test_planes_api_flujo_incorrecto.py` | 13 | Errores 404 / 409 / 422 y ausencia de escritura tras el fallo |
+| `integration/test_convenciones_del_entorno.py` | 13 | Guardián: mocks, borrados, aislamiento, naming, Postman |
+| `integration/test_planes_api_flujo_correcto.py` | 8 | Ciclo de vida completo del plan, consultas y aislamiento |
+| **Subtotal integración** | **34** | |
+| **Total** | **177** | |
 
 ---
 
 ## 7. Cobertura
 
-Resultado de `uv run pytest --cov --cov-report=term-missing`:
+Resultado de `uv run pytest --cov --cov-report=term-missing` con PostgreSQL
+levantado:
 
 | Módulo | Cobertura |
 |---|---|
+| `domain/model/plan_nutricional.py` | 100 % |
 | `domain/model/value_objects.py` | 100 % |
 | `domain/model/receta_catalogo.py` | 100 % |
-| `domain/model/plan_nutricional.py` | 98 % |
+| `infrastructure/persistence/orm_models.py` | 100 % |
+| `presentation/api/schemas/schemas.py` | 100 % |
 | `domain/model/tiempo_comida.py` | 98 % |
-| `domain/model/plan_dia.py` | 97 % |
-| `domain/model/plantilla_plan.py` | 87 % |
-| Los 5 casos de uso probados | 100 % |
-| **Total del alcance medido** | **82 %** |
+| `domain/model/plan_dia.py` | 98 % |
+| `domain/model/plantilla_plan.py` | 88 % |
+| `presentation/api/exception_handlers.py` | 83 % |
+| `infrastructure/persistence/plan_repository_impl.py` | 83 % |
+| `presentation/api/routers/planes.py` | 76 % |
+| `presentation/api/routers/plantillas.py` | 53 % |
+| `presentation/api/routers/catalogo_recetas.py` | 52 % |
+| **Total** | **79 %** |
+
+El total **baja** de 82 % a 79 % respecto al taller anterior, y eso es una buena
+señal, no un retroceso: antes se medían solo dos capas de cuatro. Ahora se mide
+todo el microservicio, y los módulos con menor cobertura señalan con exactitud lo
+que falta por cubrir — los routers de catálogo y plantillas, que quedaron fuera
+del alcance de este avance.
 
 Dos decisiones sobre la configuración (`pyproject.toml`):
 
@@ -302,26 +346,280 @@ regresión.
 
 ## 9. Entorno de pruebas para IA
 
-En `.claude/` hay dos piezas complementarias:
+En `.claude/` hay **dos parejas** de piezas, una por cada tipo de prueba:
 
-| Archivo | Qué es |
-|---|---|
-| `.claude/agents/test-writer.md` | Un **subagente** especializado: tiene sus propias herramientas, reglas y prohibiciones |
-| `.claude/skills/testing-plan-nutricional/SKILL.md` | Una **skill**: las convenciones del proyecto, consultables por cualquiera |
+| Pieza | Unitarias | Integración |
+|---|---|---|
+| **Subagente** — *quién* hace el trabajo | `.claude/agents/test-writer.md` | `.claude/agents/integration-test-writer.md` |
+| **Skill** — *cómo* se hace | `.claude/skills/testing-plan-nutricional/` | `.claude/skills/integration-testing-plan-nutricional/` |
 
-La diferencia: el agente es *quién* hace el trabajo; la skill es *cómo* se hace.
-El agente, en el paso 2 de su flujo, consulta la skill — así el conocimiento vive
-en un solo sitio y no se duplica.
-
-Lo que hace de esto un **entorno validado**: el flujo de trabajo del agente le
-obliga a ejecutar `uv run pytest` y a reportar la cobertura antes de terminar, y
-le prohíbe modificar código de `src/` para hacer pasar un test. Ningún test
-generado por IA se da por bueno sin haberse ejecutado.
+Cada agente, en el paso 2 de su flujo, consulta su skill: así el conocimiento vive
+en un solo sitio y no se duplica. Las dos skills se remiten entre sí en lugar de
+repetir contenido, y **los alcances no se solapan**: el `test-writer` tiene
+prohibido tocar `tests/integration/` y `postman/`, y el `integration-test-writer`
+tiene prohibido tocar `tests/unit/` y `tests/conftest.py`. Si le pides al
+`test-writer` que cubra un router, su instrucción es decirlo y detenerse en vez de
+escribir una unitaria con mocks que no probaría el cableado.
 
 ```
 # Cargar las convenciones en la conversación actual
 /testing-plan-nutricional
+/integration-testing-plan-nutricional
 
-# Delegar en el subagente (parte de cero, ejecuta pytest y reporta)
+# Delegar en el subagente que corresponda
 "usa el test-writer para cubrir eliminar_dia.py"
+"usa el integration-test-writer para cubrir el router de catálogo"
 ```
+
+### Qué hace que el entorno esté *validado*
+
+No basta con escribir las reglas en un documento: un documento no impide nada.
+Este entorno se apoya en tres niveles, de menor a mayor garantía.
+
+**1. El flujo del agente le obliga a demostrar su trabajo.** Ninguno de los dos
+puede terminar sin haber ejecutado `uv run pytest` y reportado la salida real y
+las líneas sin cubrir. El `integration-test-writer` debe además ejecutar el
+guardián del entorno y **comprobar el conteo de filas de la base antes y después**
+— la prueba de que sus tests no ensuciaron nada.
+
+**2. Prohibiciones explícitas que cierran los atajos conocidos.** Ninguno puede
+modificar `src/` para hacer pasar un test (si un test revela un bug, debe
+documentarlo y detenerse), ni añadir `# pragma: no cover`, ni relajar el guardián.
+El de integración tampoco puede tocar la fixture `cliente` para "arreglar" un test
+suyo: si sospecha del aislamiento, debe pararse y explicarlo.
+
+**3. Un guardián automático que comprueba las reglas.** Es la diferencia entre un
+entorno documentado y uno validado:
+
+```
+tests/integration/test_convenciones_del_entorno.py    ← 13 tests
+```
+
+Verifica por análisis estático de los propios archivos que no hay mocks en
+integración, que nadie introdujo un `TRUNCATE`/`DROP`/`CREATE DATABASE`, que el
+`conftest` conserva las tres piezas del aislamiento transaccional, que los
+archivos llevan su marcador, que los nombres describen el resultado esperado, que
+no se depende de la fecha actual, y que la colección de Postman sigue cubriendo
+ambos flujos con aserciones.
+
+No lleva el marcador `integration` y no toca la base: sigue protegiendo el
+repositorio aunque no haya Docker levantado.
+
+Que el guardián funciona se comprueba rompiéndolo a propósito. Con un archivo que
+viola cuatro reglas a la vez, esto es lo que reporta:
+
+```
+AssertionError: Las pruebas de integración no admiten dobles de prueba.
+                Encontrado: ['...: AsyncMock', '...: unittest.mock']
+AssertionError: Ninguna prueba de integración puede borrar ni crear bases o tablas:
+                el rollback ya aísla cada test. Encontrado: ['...: TRUNCATE']
+AssertionError: Archivos sin `pytestmark`: ['...']
+AssertionError: Estos nombres no describen acción, condición y resultado esperado:
+                ['test_malo']
+```
+
+Un detalle que costó afinar: el guardián analiza **código, no prosa**. La primera
+versión marcaba como infracción la frase *"esto sustituye al `plan_repo_mock` de
+las unitarias"* escrita en un docstring, y la forma de "arreglarlo" habría sido
+empeorar la documentación. Ahora `codigo_efectivo()` elimina docstrings y
+comentarios antes de escanear, pero **conserva las cadenas normales**: un
+`TRUNCATE` dentro de un `text("...")` es código ejecutable y sí debe detectarse.
+
+## 10. Pruebas de integración
+
+Aplicación del **taller de Integration Tests** al caso de estudio. Alcance de
+este avance: el agregado principal, **PlanNutricional**.
+
+### 10.1 Qué cambia respecto a una prueba unitaria
+
+|  | Unitaria | Integración |
+|---|---|---|
+| Dobles de prueba | `AsyncMock(spec=Puerto)` | **Ninguno** |
+| Base de datos | No se usa | PostgreSQL real |
+| Punto de entrada | El caso de uso, en Python | Una petición HTTP |
+| Qué demuestra | Que la **regla de negocio** es correcta | Que el **cableado** entre capas funciona |
+
+El recorrido completo de cada test es:
+
+```
+HTTP → router → caso de uso → repositorio SQLAlchemy → PostgreSQL → HTTP
+```
+
+Un mock es útil precisamente porque oculta la infraestructura; el precio es que
+oculta también sus fallos. Estas pruebas cubren tres cosas que las unitarias no
+pueden ver, por buenas que sean:
+
+1. **El mapeo dominio ↔ ORM.** Que `plan_repository_impl.py` sabe guardar la
+   jerarquía plan → día → tiempo de comida → receta y volver a reconstruirla.
+2. **La traducción de errores.** Que `exception_handlers.py` convierte cada
+   excepción de dominio en el status HTTP y el código `tipo` que promete el
+   README (404 / 409 / 422).
+3. **El `commit` y el `rollback`.** Que tras un error no queda nada escrito.
+
+### 10.2 Los dos flujos
+
+**Flujo correcto** (`test_planes_api_flujo_correcto.py`). El test principal es
+uno solo y largo, deliberadamente: partirlo rompería lo que se quiere demostrar,
+que es que el estado sobrevive de una petición a la siguiente.
+
+```
+POST   /planes                                             → 201  (guarda plan_id)
+POST   /planes/{id}/dias                     {numero_dia: 1}   → 204
+POST   /planes/{id}/dias/1/tiempos           {tipo: DESAYUNO}  → 204
+POST   /planes/{id}/dias/1/tiempos/DESAYUNO/recetas  {...}     → 204
+GET    /planes/{id}                                        → 200  jerarquía completa
+PATCH  /planes/{id}/recomendacion                          → 204  + GET lo confirma
+PATCH  /planes/{id}/estado          {nuevo_estado: FINALIZADO} → 204  + GET lo confirma
+```
+
+**Flujo incorrecto** (`test_planes_api_flujo_incorrecto.py`). Cada test viola una
+regla y comprueba el status y el `tipo` devueltos:
+
+| Escenario | Respuesta |
+|---|---|
+| Obtener un plan inexistente | 404 |
+| Agregar un día a un plan inexistente | 404 `PLAN_NO_ENCONTRADO` |
+| Agregar un tiempo de comida a un día inexistente | 404 `DIA_NO_ENCONTRADO` |
+| Agregar un día duplicado | 409 `DIA_DUPLICADO` |
+| Agregar un tiempo de comida duplicado | 409 `TIEMPO_COMIDA_DUPLICADO` |
+| Agregar una receta con nombre duplicado en mayúsculas | 409 `RECETA_DUPLICADA` |
+| Modificar un plan FINALIZADO | 409 `PLAN_NO_MODIFICABLE` |
+| Reactivar un plan FINALIZADO | 409 `TRANSICION_ESTADO_INVALIDA` |
+| Agregar el día 16 a un plan de 15 días | 422 `DIA_FUERA_DE_DURACION` |
+| Crear un plan de 20 días | 422 `VALOR_INVALIDO` |
+| Crear un plan con la recomendación vacía | 422 `VALOR_INVALIDO` |
+| Crear un plan sin `paciente_id` | 422 de Pydantic |
+| Usar un tiempo de comida `BRUNCH` | 422 de Pydantic |
+
+> **La regla del camino de error, versión integrada.** En las unitarias, cada
+> rama de error termina en `plan_repo_mock.guardar.assert_not_awaited()`. Aquí el
+> equivalente es un `GET` posterior que comprueba que el plan quedó intacto — y
+> eso sí prueba de verdad que el `rollback` funciona, cosa que un mock no puede
+> confirmar.
+
+### 10.3 Cómo se montan (`tests/integration/conftest.py`)
+
+Tres decisiones sostienen el módulo:
+
+**1. Una sola base de datos, y no se ensucia.** Se usa `db_plan_nutricional`, la
+misma del docker-compose: no se crea ninguna base de prueba aparte. Lo que evita
+que los tests dejen basura es que **cada test corre dentro de una transacción que
+se revierte al terminar**.
+
+El problema a resolver es que la aplicación hace `commit()` al final de cada
+petición. Si ese commit llegara a la base, cada test dejaría filas sueltas. La
+solución tiene tres pasos, todos en la fixture `cliente`:
+
+```python
+conexion = await motor_test.connect()
+transaccion = await conexion.begin()               # 1. transacción externa
+
+fabrica_sesion = async_sessionmaker(
+    bind=conexion,
+    join_transaction_mode="create_savepoint",      # 2. el commit() de la app
+    expire_on_commit=False,                        #    solo libera un SAVEPOINT
+)
+...
+await transaccion.rollback()                       # 3. se deshace todo
+```
+
+Con `join_transaction_mode="create_savepoint"`, el `commit()` de cada petición no
+confirma nada de verdad: libera un SAVEPOINT dentro de la transacción externa,
+que sigue abierta. Al acabar el test, un `rollback()` borra todo de golpe.
+
+Dos consecuencias que importan:
+
+- Las peticiones **sí se ven entre sí** (comparten transacción), que es justo lo
+  que necesita un flujo end-to-end para ser realista.
+- El `rollback()` de una petición fallida revierte solo hasta su SAVEPOINT, no lo
+  anterior — exactamente el comportamiento de producción. Por eso los tests del
+  flujo incorrecto pueden comprobar que un error no borró lo que ya estaba.
+
+Como nada se confirma, no hace falta `TRUNCATE` entre tests ni una base aparte, y
+la suite es más rápida. Los tests
+`test_aislamiento_paso_1_*` y `test_aislamiento_paso_2_*` lo demuestran: el
+primero crea un plan para un paciente fijo, el segundo comprueba que ya no
+existe.
+
+> **Corolario para escribir tests:** como la base puede tener datos previos,
+> ningún test debe asumir que está vacía. Se comprueba **pertenencia**
+> (`plan_id in ids`) y no igualdad de listados, y las consultas se acotan a un
+> `paciente_id` generado con `uuid4()` en el propio test.
+
+**2. Un solo punto de inyección.** Los tres routers definen cada uno su propio
+`_get_repo` — son objetos de función **distintos**, así que sobrescribirlos uno a
+uno sería frágil. Pero todos acaban dependiendo de la misma hoja compartida:
+
+```python
+app.dependency_overrides[get_db_session] = _sesion_de_test
+```
+
+Esa única línea redirige toda la aplicación a la conexión de prueba. La sesión de
+test replica el contrato de la de producción (`commit` al salir, `rollback` ante
+excepción); sin el `commit`, ni siquiera el SAVEPOINT se liberaría y el flujo
+correcto no probaría nada.
+
+**3. No hace falta levantar uvicorn.** `httpx.AsyncClient` con `ASGITransport`
+habla con la app en el mismo proceso, pero pasando por routers, `Depends`,
+validación de Pydantic y manejadores de excepción. Es tan real como una petición
+de red, y mucho más rápido.
+
+### 10.4 Cómo ejecutarlas
+
+```powershell
+# 1. Levantar PostgreSQL (el mismo de siempre, no hace falta nada más)
+docker compose -f ms-plan-nutricional-docker-compose.yml up -d
+
+# 2. Correr solo las de integración
+uv run pytest tests/integration -v
+
+# 3. O toda la suite
+uv run pytest
+```
+
+Sin Docker no falla nada: la fixture detecta que PostgreSQL no responde y hace
+`pytest.skip`, con lo que `uv run pytest` reporta `156 passed, 21 skipped`.
+El guardián del entorno sigue corriendo, porque no toca la base.
+
+Para apuntar a otro servidor, `TEST_DATABASE_URL` tiene prioridad sobre
+`settings.database_url`.
+
+**Cómo comprobar que no ensucian la base.** Es fácil de verificar a mano:
+
+```powershell
+docker exec plan_nutricional_db psql -U postgres -d db_plan_nutricional -t -c "SELECT count(*) FROM planes_nutricionales;"
+uv run pytest tests/integration -q
+docker exec plan_nutricional_db psql -U postgres -d db_plan_nutricional -t -c "SELECT count(*) FROM planes_nutricionales;"
+```
+
+El conteo es idéntico antes y después, por muchas veces que se repita.
+
+### 10.5 Los mismos flujos en Postman
+
+En `postman/` está la colección equivalente, para ejecutar las pruebas contra la
+API levantada de verdad:
+
+```bash
+docker compose -f ms-plan-nutricional-docker-compose.yml up -d
+uv run fastapi dev main.py          # en otra terminal
+
+newman run postman/ms-plan-nutricional.postman_collection.json \
+       -e postman/ms-plan-nutricional.postman_environment.json
+```
+
+También se importa directamente en Postman (**Import** → los dos archivos) y se
+ejecuta con el *Collection Runner*. Tiene las mismas dos carpetas —
+`01 — Flujo correcto` y `02 — Flujo incorrecto` — con 34 aserciones `pm.test`.
+Las peticiones de la carpeta 01 son dependientes entre sí (la primera guarda
+`plan_id` en una variable de colección), así que hay que ejecutarlas **en orden**.
+
+> **Diferencia importante con pytest.** Postman habla con la API por la red, así
+> que no puede envolver nada en una transacción: **sus peticiones sí escriben** en
+> `db_plan_nutricional`. Es el precio de probar el servicio tal como está
+> desplegado. Cada corrida genera un `paciente_id` nuevo con `{{$guid}}`, de modo
+> que la colección se puede repetir sin chocar consigo misma; si quieres dejar la
+> base como estaba, bórralos después:
+>
+> ```powershell
+> docker exec plan_nutricional_db psql -U postgres -d db_plan_nutricional -c "TRUNCATE planes_nutricionales CASCADE;"
+> ```

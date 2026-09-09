@@ -1,0 +1,559 @@
+{
+  "info": {
+    "name": "ms-plan-nutricional — Pruebas de integración",
+    "description": "Pruebas de integración de la API de planes nutricionales (BC3 — NUR-TRICENTER).\n\nDos carpetas:\n\n- **01 — Flujo correcto**: recorre el ciclo de vida completo de un plan (crear → agregar día → tiempo de comida → receta → releer → modificar → finalizar). Las peticiones son dependientes: la primera guarda `plan_id` en una variable de colección que usan todas las demás, así que hay que ejecutar la carpeta **en orden**.\n- **02 — Flujo incorrecto**: comprueba que cada regla de negocio violada devuelve el status HTTP y el código `tipo` que define `presentation/api/exception_handlers.py`.\n\nAntes de ejecutar:\n\n    docker compose -f ms-plan-nutricional-docker-compose.yml up -d\n    uv run fastapi dev main.py\n\nDesde la terminal:\n\n    newman run postman/ms-plan-nutricional.postman_collection.json -e postman/ms-plan-nutricional.postman_environment.json",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "plan_id", "value": "", "type": "string" },
+    { "key": "paciente_id", "value": "", "type": "string" },
+    { "key": "plan_finalizado_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "01 — Flujo correcto",
+      "description": "Ciclo de vida completo de un plan nutricional. Ejecutar en orden.",
+      "item": [
+        {
+          "name": "1. Crear plan (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Un paciente nuevo en cada corrida: la colección es repetible.",
+                  "pm.collectionVariables.set('paciente_id', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "const plan = pm.response.json();",
+                  "pm.collectionVariables.set('plan_id', plan.id);",
+                  "",
+                  "pm.test('El plan nace ACTIVO y sin días', function () {",
+                  "    pm.expect(plan.estado).to.eql('ACTIVO');",
+                  "    pm.expect(plan.dias).to.be.an('array').that.is.empty;",
+                  "});",
+                  "",
+                  "pm.test('El dominio calcula fecha_fin = fecha_inicio + (duración - 1)', function () {",
+                  "    pm.expect(plan.duracion_dias).to.eql(15);",
+                  "    pm.expect(plan.fecha_fin).to.eql('2026-01-15');",
+                  "});",
+                  "",
+                  "pm.test('Conserva el paciente enviado', function () {",
+                  "    pm.expect(plan.paciente_id).to.eql(pm.collectionVariables.get('paciente_id'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/planes", "host": ["{{base_url}}"], "path": ["planes"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paciente_id\": \"{{paciente_id}}\",\n  \"fecha_inicio\": \"2026-01-01\",\n  \"duracion_dias\": 15,\n  \"necesidad\": {\n    \"calorias\": \"2000\",\n    \"proteinas\": \"120\",\n    \"grasas\": \"60\",\n    \"carbohidratos\": \"250\"\n  },\n  \"recomendacion_texto\": \"Dieta hipocalórica con alto aporte proteico.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "2. Agregar día 1 (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 204 No Content', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_id}}/dias",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_id}}", "dias"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"numero_dia\": 1\n}" }
+          }
+        },
+        {
+          "name": "3. Agregar tiempo de comida DESAYUNO (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 204 No Content', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_id}}/dias/1/tiempos",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_id}}", "dias", "1", "tiempos"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"tipo\": \"DESAYUNO\"\n}" }
+          }
+        },
+        {
+          "name": "4. Agregar receta al DESAYUNO (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 204 No Content', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_id}}/dias/1/tiempos/DESAYUNO/recetas",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_id}}", "dias", "1", "tiempos", "DESAYUNO", "recetas"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Avena con frutas\",\n  \"descripcion\": \"Avena cocida con banana y frutos rojos.\",\n  \"instrucciones\": \"Cocer la avena 5 minutos y añadir la fruta picada.\",\n  \"cantidad\": \"250\",\n  \"unidad\": \"gramos\"\n}"
+            }
+          }
+        },
+        {
+          "name": "5. Releer el plan: jerarquía completa (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const plan = pm.response.json();",
+                  "",
+                  "// Esta es la aserción central de la prueba de integración: todo lo",
+                  "// agregado en peticiones anteriores vuelve desde PostgreSQL.",
+                  "pm.test('El plan tiene un día', function () {",
+                  "    pm.expect(plan.dias).to.have.lengthOf(1);",
+                  "    pm.expect(plan.dias[0].numero_dia).to.eql(1);",
+                  "});",
+                  "",
+                  "pm.test('El día tiene el tiempo de comida DESAYUNO', function () {",
+                  "    pm.expect(plan.dias[0].tiempos_comida).to.have.lengthOf(1);",
+                  "    pm.expect(plan.dias[0].tiempos_comida[0].tipo).to.eql('DESAYUNO');",
+                  "});",
+                  "",
+                  "pm.test('El DESAYUNO tiene la receta con su porción', function () {",
+                  "    const recetas = plan.dias[0].tiempos_comida[0].recetas;",
+                  "    pm.expect(recetas).to.have.lengthOf(1);",
+                  "    pm.expect(recetas[0].nombre).to.eql('Avena con frutas');",
+                  "    pm.expect(recetas[0].unidad).to.eql('gramos');",
+                  "    pm.expect(Number(recetas[0].cantidad)).to.eql(250);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_id}}"]
+            }
+          }
+        },
+        {
+          "name": "6. Modificar la recomendación (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 204 No Content', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_id}}/recomendacion",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_id}}", "recomendacion"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"texto\": \"Aumentar la ingesta de fibra.\"\n}" }
+          }
+        },
+        {
+          "name": "7. Finalizar el plan (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 204 No Content', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "",
+                  "// Se guarda para reutilizarlo en la carpeta de flujos incorrectos.",
+                  "pm.collectionVariables.set('plan_finalizado_id', pm.collectionVariables.get('plan_id'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_id}}/estado",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_id}}", "estado"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"nuevo_estado\": \"FINALIZADO\"\n}" }
+          }
+        },
+        {
+          "name": "8. Verificar cambios persistidos (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const plan = pm.response.json();",
+                  "",
+                  "pm.test('La recomendación quedó modificada', function () {",
+                  "    pm.expect(plan.recomendacion_texto).to.eql('Aumentar la ingesta de fibra.');",
+                  "});",
+                  "",
+                  "pm.test('El plan quedó FINALIZADO', function () {",
+                  "    pm.expect(plan.estado).to.eql('FINALIZADO');",
+                  "});",
+                  "",
+                  "pm.test('El contenido del plan sobrevive al cambio de estado', function () {",
+                  "    pm.expect(plan.dias).to.have.lengthOf(1);",
+                  "    pm.expect(plan.dias[0].tiempos_comida[0].recetas).to.have.lengthOf(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 — Flujo incorrecto",
+      "description": "Cada petición viola una regla y comprueba el status HTTP y el código `tipo` que devuelve exception_handlers.py. Depende de que la carpeta 01 se haya ejecutado antes (usa `plan_finalizado_id`).",
+      "item": [
+        {
+          "name": "404 — Obtener un plan inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Explica que el plan no existe', function () {",
+                  "    pm.expect(pm.response.json().detail.toLowerCase()).to.include('no encontrado');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/planes/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "00000000-0000-0000-0000-000000000000"]
+            }
+          }
+        },
+        {
+          "name": "404 — Agregar día a un plan inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404 Not Found', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('El tipo de error es PLAN_NO_ENCONTRADO', function () {",
+                  "    pm.expect(pm.response.json().tipo).to.eql('PLAN_NO_ENCONTRADO');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/00000000-0000-0000-0000-000000000000/dias",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "00000000-0000-0000-0000-000000000000", "dias"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"numero_dia\": 1\n}" }
+          }
+        },
+        {
+          "name": "409 — Agregar un día duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "// El plan de la carpeta 01 está FINALIZADO, así que el dominio",
+                  "// corta antes por no modificable. Ambos errores son 409.",
+                  "pm.test('El tipo de error es de conflicto de estado del plan', function () {",
+                  "    pm.expect(pm.response.json().tipo).to.be.oneOf(['DIA_DUPLICADO', 'PLAN_NO_MODIFICABLE']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_finalizado_id}}/dias",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_finalizado_id}}", "dias"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"numero_dia\": 1\n}" }
+          }
+        },
+        {
+          "name": "409 — Modificar un plan FINALIZADO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test('El tipo de error es PLAN_NO_MODIFICABLE', function () {",
+                  "    pm.expect(pm.response.json().tipo).to.eql('PLAN_NO_MODIFICABLE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_finalizado_id}}/recomendacion",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_finalizado_id}}", "recomendacion"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"texto\": \"Ya no debería poder cambiarse.\"\n}" }
+          }
+        },
+        {
+          "name": "409 — Reactivar un plan FINALIZADO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "pm.test('El tipo de error es TRANSICION_ESTADO_INVALIDA', function () {",
+                  "    pm.expect(pm.response.json().tipo).to.eql('TRANSICION_ESTADO_INVALIDA');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_finalizado_id}}/estado",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_finalizado_id}}", "estado"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"nuevo_estado\": \"ACTIVO\"\n}" }
+          }
+        },
+        {
+          "name": "422 — Crear plan con duración no permitida",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('paciente_id', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422 Unprocessable Entity', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "pm.test('El tipo de error es VALOR_INVALIDO', function () {",
+                  "    pm.expect(pm.response.json().tipo).to.eql('VALOR_INVALIDO');",
+                  "});",
+                  "",
+                  "pm.test('El mensaje indica que solo se admiten 15 o 30 días', function () {",
+                  "    pm.expect(pm.response.json().detail).to.include('15 o 30');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/planes", "host": ["{{base_url}}"], "path": ["planes"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paciente_id\": \"{{paciente_id}}\",\n  \"fecha_inicio\": \"2026-01-01\",\n  \"duracion_dias\": 20,\n  \"necesidad\": {\n    \"calorias\": \"2000\",\n    \"proteinas\": \"120\",\n    \"grasas\": \"60\",\n    \"carbohidratos\": \"250\"\n  },\n  \"recomendacion_texto\": \"Duración fuera de las permitidas.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "422 — Crear plan sin paciente_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422 Unprocessable Entity', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "// Este 422 no lo produce el dominio sino la validación de Pydantic:",
+                  "// el cuerpo trae una lista de errores por campo.",
+                  "pm.test('Pydantic señala el campo paciente_id como faltante', function () {",
+                  "    const campos = pm.response.json().detail.map(function (e) {",
+                  "        return e.loc[e.loc.length - 1];",
+                  "    });",
+                  "    pm.expect(campos).to.include('paciente_id');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/planes", "host": ["{{base_url}}"], "path": ["planes"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fecha_inicio\": \"2026-01-01\",\n  \"duracion_dias\": 15,\n  \"necesidad\": {\n    \"calorias\": \"2000\",\n    \"proteinas\": \"120\",\n    \"grasas\": \"60\",\n    \"carbohidratos\": \"250\"\n  },\n  \"recomendacion_texto\": \"Falta el paciente.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "422 — Tiempo de comida de tipo inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422 Unprocessable Entity', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "pm.test('BRUNCH no pertenece al enum TipoTiempoComida', function () {",
+                  "    pm.expect(pm.response.text()).to.include('BRUNCH');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/planes/{{plan_finalizado_id}}/dias/1/tiempos",
+              "host": ["{{base_url}}"],
+              "path": ["planes", "{{plan_finalizado_id}}", "dias", "1", "tiempos"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"tipo\": \"BRUNCH\"\n}" }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -371,17 +371,21 @@ docker exec -it plan_nutricional_db psql -U postgres -d db_plan_nutricional
 
 ## Pruebas y Cobertura
 
-> La suite **no requiere PostgreSQL**: los repositorios se sustituyen por mocks,
-> de modo que las pruebas se ejecutan aisladas de la infraestructura.
+La suite recoge **dos talleres**: pruebas unitarias (`tests/unit/`) y pruebas de
+integración (`tests/integration/`).
 
 ```bash
-# Instalar dependencias (incluye el grupo dev: pytest, pytest-asyncio, pytest-cov)
+# Instalar dependencias (grupo dev: pytest, pytest-asyncio, pytest-cov, httpx)
 uv sync
 
-# Ejecutar toda la suite
+# Toda la suite
 uv run pytest -q
 
-# Ejecutar con medición de cobertura (terminal + reporte HTML en htmlcov/)
+# Solo unitarias (no necesitan PostgreSQL) / solo integración (sí lo necesita)
+uv run pytest tests/unit -q
+uv run pytest tests/integration -v
+
+# Con medición de cobertura (terminal + reporte HTML en htmlcov/)
 uv run pytest --cov --cov-report=term-missing --cov-report=html
 ```
 
@@ -389,16 +393,51 @@ uv run pytest --cov --cov-report=term-missing --cov-report=html
 |---|---|
 | Capa de Dominio | 115 tests — Value Objects, invariantes de los agregados, ciclo de vida del plan |
 | Capa de Aplicación | 28 tests — casos de uso con **mocks** de los repositorios (`AsyncMock(spec=...)`) |
-| Cobertura | 82 % del alcance medido (dominio y aplicación) |
-| Fuera de alcance | `infrastructure/` y `presentation/`, excluidos de la cobertura en `pyproject.toml` |
+| Integración (API + BD) | 21 tests — `httpx.AsyncClient` contra la app FastAPI real y PostgreSQL, **sin mocks** |
+| Entorno de pruebas | 13 tests que validan las reglas del propio entorno de integración (ver `tests/README.md` §9) |
+| Cobertura | 79 % de todo el microservicio (las cuatro capas) |
 
-El repositorio incluye además un entorno de pruebas asistido por IA: el subagente
-`.claude/agents/test-writer.md` y la skill
-`.claude/skills/testing-plan-nutricional/SKILL.md`, que fijan las convenciones y
-obligan a ejecutar la suite antes de dar por bueno cualquier test generado.
+**Pruebas unitarias.** No requieren PostgreSQL: los repositorios se sustituyen
+por mocks, de modo que se ejecutan aisladas de la infraestructura.
+
+**Pruebas de integración.** Recorren el camino completo
+`HTTP → router → caso de uso → repositorio → PostgreSQL → HTTP` sobre el agregado
+`PlanNutricional`, con un flujo correcto de punta a punta y trece flujos
+incorrectos que verifican el mapeo de cada error de dominio a su status HTTP.
+Corren contra la **misma** `db_plan_nutricional` del docker-compose —no hace
+falta ninguna base adicional— y aun así **no dejan ni una fila**: cada test se
+envuelve en una transacción que se revierte al terminar. Si PostgreSQL no está
+levantado se marcan como `skipped` y la suite no se rompe:
+
+```bash
+docker compose -f ms-plan-nutricional-docker-compose.yml up -d
+uv run pytest tests/integration -v
+```
+
+**Los mismos flujos en Postman.** En `postman/` está la colección equivalente
+(34 aserciones `pm.test`), para ejecutarla contra la API levantada. A diferencia
+de pytest, estas peticiones **sí escriben** en la base, porque van por la red:
+
+```bash
+uv run fastapi dev main.py          # en otra terminal
+
+newman run postman/ms-plan-nutricional.postman_collection.json \
+       -e postman/ms-plan-nutricional.postman_environment.json
+```
+
+**Entorno de pruebas asistido por IA.** El repositorio incluye dos subagentes
+especializados —`test-writer` (unitarias) e `integration-test-writer` (API y
+persistencia)— con una skill de convenciones cada uno y alcances que no se
+solapan. Lo que lo hace un entorno *validado* y no solo documentado: el flujo de
+cada agente le obliga a ejecutar la suite y reportar la salida real, tiene
+prohibido modificar `src/` para hacer pasar un test, y
+`tests/integration/test_convenciones_del_entorno.py` comprueba automáticamente que
+nadie introduzca mocks en integración, borre datos de la base o rompa el
+aislamiento transaccional. Detalle completo en `tests/README.md` §9.
 
 Ver **[tests/README.md](tests/README.md)** para el detalle: qué es un mock y cómo
-se usa aquí, el patrón AAA, el inventario completo de la suite y los hallazgos.
+se usa aquí, el patrón AAA, el inventario completo de la suite, cómo se montan las
+pruebas de integración y los hallazgos.
 
 ---
 
@@ -409,7 +448,9 @@ se usa aquí, el patrón AAA, el inventario completo de la suite y los hallazgos
 | Capa de Dominio (AR, Entidades, VOs, Excepciones) | Completo — incluye `PlanNutricional`, `RecetaCatalogo` y `PlantillaPlan` |
 | Interfaces de Repositorio y Gateway | Completo |
 | Capa de Aplicación (casos de uso, queries) | Completo |
-| Pruebas unitarias | 143 tests (dominio + casos de uso) · 82 % de cobertura · `pytest` + `unittest.mock` |
+| Pruebas unitarias | 143 tests (dominio + casos de uso) · `pytest` + `unittest.mock` |
+| Pruebas de integración | 21 tests sobre `/planes` (API + PostgreSQL reales, sin dejar datos) · `httpx` + colección Postman · cobertura total 79 % |
+| Entorno de pruebas para IA | 2 subagentes (`test-writer`, `integration-test-writer`) + 2 skills + guardián automático de 13 tests |
 | API REST (FastAPI, endpoints, schemas) | Completo — `/planes`, `/catalogo-recetas`, `/plantillas` |
 | Persistencia | PostgreSQL 16 vía SQLAlchemy async (activo) |
 | Mensajería | Pendiente |
@@ -428,4 +469,4 @@ se usa aquí, el patrón AAA, el inventario completo de la suite y los hallazgos
 | Validación | Pydantic v2 |
 | Contenedores | Docker + Docker Compose |
 | Dependencias | `uv` con `pyproject.toml` |
-| Pruebas | pytest + pytest-asyncio + pytest-cov · mocks con `unittest.mock.AsyncMock` |
+| Pruebas | pytest + pytest-asyncio + pytest-cov · mocks con `unittest.mock.AsyncMock` · integración con `httpx.AsyncClient` y Postman/newman |

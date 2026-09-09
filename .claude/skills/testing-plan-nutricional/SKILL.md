@@ -11,9 +11,19 @@ description: Convenciones de testing de ms-plan-nutricional — patrón AAA, nam
 |---|---|---|
 | Value Object, entidad, Aggregate Root | `tests/unit/domain/` | ninguno — objetos reales |
 | Caso de uso (`use_cases/*.py`) | `tests/unit/application/` | `AsyncMock(spec=<PuertoABC>)` |
-| Repositorios, routers, ORM | *fuera de alcance* | — (excluidos de cobertura) |
+| Repositorios, routers, ORM, mapeo de errores a HTTP | `tests/integration/` | ninguno — PostgreSQL real |
 
-Fixtures compartidas: `tests/conftest.py`.
+Fixtures compartidas: `tests/conftest.py` (unitarias),
+`tests/integration/conftest.py` (integración — son mundos separados: las de
+integración no usan los builders ni los mocks de las unitarias).
+
+**Regla para elegir:** si lo que se prueba es una *regla de negocio*, va en
+`tests/unit/` con mocks. Si lo que se prueba es el *cableado entre capas* — que
+el ORM persiste bien, que un error de dominio sale como 409, que el `rollback`
+funciona — va en `tests/integration/`. Nunca se repite una regla de negocio en
+integración: ahí ya está cubierta y el test sería más lento sin aportar nada.
+
+Ver la sección 8 para el patrón de las pruebas de integración.
 
 ## 2. Patrón AAA y naming
 
@@ -132,8 +142,12 @@ Ejemplos completos ya escritos:
 ## 6. Comandos
 
 ```powershell
-# Suite completa
+# Suite completa (unitarias + integración)
 uv run pytest -q
+
+# Solo unitarias / solo integración
+uv run pytest tests/unit -q
+uv run pytest tests/integration -v
 
 # Un archivo, con detalle
 uv run pytest tests/unit/domain/test_plan_nutricional.py -v
@@ -146,9 +160,10 @@ uv run pytest --cov --cov-report=term-missing --cov-report=html
 Start-Process .\htmlcov\index.html
 ```
 
-Cobertura configurada en `pyproject.toml`: mide el paquete `plan_nutricional` y
-excluye `infrastructure/` y `presentation/` (fuera de alcance). No hay umbral
-`fail_under`: la cobertura se mide y se reporta, no bloquea la suite.
+Cobertura configurada en `pyproject.toml`: mide el paquete `plan_nutricional`
+completo — desde el taller de integración ya no se excluyen `infrastructure/` ni
+`presentation/`; solo se omiten los `__init__.py`. No hay umbral `fail_under`: la
+cobertura se mide y se reporta, no bloquea la suite.
 
 ## 7. Errores frecuentes
 
@@ -161,3 +176,26 @@ excluye `infrastructure/` y `presentation/` (fuera de alcance). No hay umbral
 - **Cambiar el estado del plan antes de agregarle días** en un builder: un plan
   no ACTIVO ya no admite cambios (por eso `construir_plan` cambia el estado al
   final).
+- **Escribir una prueba de integración con mocks** → si hay un `AsyncMock`, no es
+  una prueba de integración. Se cambia de carpeta o se quita el mock.
+
+## 8. Pruebas de integración
+
+Viven en `tests/integration/` y son otro mundo: sin mocks, contra la API y
+PostgreSQL reales. Sus convenciones están en su propia skill:
+
+```
+/integration-testing-plan-nutricional
+```
+
+Lo mínimo que conviene saber desde aquí:
+
+- Llevan `pytestmark = pytest.mark.integration` y usan la fixture `cliente`
+  (`httpx.AsyncClient` sobre la app FastAPI real).
+- Corren sobre `db_plan_nutricional` —la misma de desarrollo— **sin ensuciarla**:
+  cada test va dentro de una transacción que se revierte al terminar. Nunca
+  añadas un `TRUNCATE` ahí.
+- Nunca repitas en integración una regla de negocio ya cubierta en unitarias.
+
+Para escribirlas, el subagente es `integration-test-writer` (el `test-writer` de
+este proyecto solo hace unitarias).
