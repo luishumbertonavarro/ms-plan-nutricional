@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:password@localhost:5434/db_plan_nutricional"
     app_env: str = "development"
     log_level: str = "INFO"
+    # URL base del microservicio de Pacientes (BC externo), usada por PacienteGatewayHttp.
+    pacientes_base_url: str = "http://localhost:8001"
 
 
 settings = Settings()

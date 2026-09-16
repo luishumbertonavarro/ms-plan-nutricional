@@ -1,14 +1,17 @@
 # Pruebas — ms-plan-nutricional
 
-Suite de pruebas del BC3 – Planificación Nutricional. Recoge dos talleres
+Suite de pruebas del BC3 – Planificación Nutricional. Recoge tres talleres
 aplicados al caso de estudio del proyecto final:
 
 - **Taller de Unit Tests** → `tests/unit/` — 143 tests, sin base de datos.
 - **Taller de Integration Tests** → `tests/integration/` — 21 tests contra la API
   y PostgreSQL reales, más 13 que validan el propio entorno
   (ver [sección 10](#10-pruebas-de-integración)).
+- **Taller de Contract Testing (Pact)** → `tests/contract/` — 5 interacciones
+  consumer, 1 verificación de provider y 12 tests que validan el entorno
+  (ver [sección 11](#11-contract-testing-con-pact)).
 
-**177 tests · 79 % de cobertura.**
+**195 tests · 80 % de cobertura.**
 
 ---
 
@@ -104,11 +107,21 @@ tests/
 │       ├── test_cambiar_estado_plan.py
 │       ├── test_agregar_receta_desde_catalogo.py
 │       └── test_crear_plan_desde_plantilla.py
-└── integration/                # no espeja src/: se organiza por flujo, no por capa
-    ├── conftest.py             # motor, transacción reversible y cliente HTTP
-    ├── test_planes_api_flujo_correcto.py
-    ├── test_planes_api_flujo_incorrecto.py
-    └── test_convenciones_del_entorno.py   # guardián de las reglas (sección 9)
+├── integration/                # no espeja src/: se organiza por flujo, no por capa
+│   ├── conftest.py             # motor, transacción reversible y cliente HTTP
+│   ├── test_planes_api_flujo_correcto.py
+│   ├── test_planes_api_flujo_incorrecto.py
+│   └── test_convenciones_del_entorno.py   # guardián de las reglas (sección 9)
+└── contract/                   # Pact: se organiza por rol (sección 11)
+    ├── conftest.py             # carpeta pacts/, contrato_limpio, mock_server
+    ├── consumer/
+    │   ├── cliente_planes.py                        # cliente de "app-paciente"
+    │   ├── test_app_paciente_consume_planes.py      # 3 interacciones
+    │   └── test_plan_nutricional_consume_pacientes.py  # 2 interacciones
+    ├── provider/
+    │   ├── app_provider.py                          # app real + provider states
+    │   └── test_verificar_planes_provider.py        # verificación con Pact
+    └── test_convenciones_contrato.py                # guardián de las reglas
 ```
 
 `tests/integration/` **no espeja la estructura de `src/`**, y es a propósito: una
@@ -623,3 +636,123 @@ Las peticiones de la carpeta 01 son dependientes entre sí (la primera guarda
 > ```powershell
 > docker exec plan_nutricional_db psql -U postgres -d db_plan_nutricional -c "TRUNCATE planes_nutricionales CASCADE;"
 > ```
+
+## 11. Contract testing con Pact
+
+Aplicación del **taller de Contract Testing** al caso de estudio, con
+[pact-python](https://github.com/pact-foundation/pact-python) v3.
+
+### 11.1 Conceptos
+
+Una prueba de contrato comprueba que **dos servicios siguen entendiéndose**
+(mismas rutas, mismos campos, mismos tipos) sin tener que desplegarlos juntos.
+
+| Concepto | Qué es |
+|---|---|
+| **Consumer** | Servicio que hace la petición. **Escribe** el contrato. |
+| **Provider** | Servicio que responde. **Verifica** el contrato contra su API real. |
+| **Interacción** | Una petición y la respuesta que el consumer espera. |
+| **Pact file** | El JSON con las interacciones: `pacts/<consumer>-<provider>.json`. |
+| **Provider state** | La precondición (`given(...)`) que el provider prepara antes de cada interacción. |
+| **Matchers** | Reglas de tipo o forma (`uuid`, `integer`, `regex`, `each_like`…) en vez de valores exactos. |
+
+Flujo: el test consumer genera el pact → el provider lo reproduce contra su API →
+si todo cumple, los dos servicios son compatibles.
+
+### 11.2 Relaciones cubiertas
+
+```
+app-paciente ────────────▶ ms-plan-nutricional     ✅ verificado en este repo
+  GET /planes/{id}            → 200 (plan con días, tiempos y recetas)
+  GET /planes/paciente/{id}   → 200 (lista de planes)
+  GET /planes/{id}            → 404 (plan inexistente)
+
+ms-plan-nutricional ─────▶ ms-pacientes            ⏳ lo verifica el equipo de ms-pacientes
+  GET /pacientes/{id}         → 200 (nombre, código, identificación)
+  GET /pacientes/{id}         → 404 (PacienteNoEncontradoError)
+```
+
+- **`app-paciente`** es un consumer simulado: la app móvil del paciente (HU-18).
+  Su cliente, `ClientePlanes`, vive en `tests/contract/consumer/cliente_planes.py`.
+- En la segunda relación, **ms-plan-nutricional es el consumer**. El contrato sale
+  del adaptador real `PacienteGatewayHttp`
+  (`src/plan_nutricional/infrastructure/gateways/paciente_gateway_http.py`), que
+  implementa el puerto `PacienteGateway`. El pact generado se entrega a ms-pacientes.
+
+### 11.3 Cómo se verifica el provider sin ensuciar la base
+
+`tests/contract/provider/app_provider.py` **monta la app real** dentro de una app
+de verificación que añade dos cosas:
+
+1. Una **transacción externa** sobre `db_plan_nutricional`, que se revierte al
+   apagar uvicorn. Las sesiones de la app usan `create_savepoint`, igual que en §10.
+2. La ruta **`POST /_pact/provider-states`**. Pact la llama antes de cada
+   interacción (`setup`: abre un SAVEPOINT y crea el plan con el repositorio real)
+   y después (`teardown`: revierte ese SAVEPOINT).
+
+Así cada interacción empieza limpia, y al final la base queda igual que antes.
+
+### 11.4 Cómo ejecutar
+
+```powershell
+docker compose -f ms-plan-nutricional-docker-compose.yml up -d
+uv run pytest tests/contract/consumer -v                       # 1. genera pacts/
+uv run pytest tests/contract/provider -v                       # 2. verifica el contrato
+uv run pytest tests/contract/test_convenciones_contrato.py -v  # 3. guardián (sin Docker)
+uv run pytest -m contract                                      # solo contratos
+```
+
+Salida de la verificación:
+
+```
+Verifying a pact between app-paciente and ms-plan-nutricional
+  una petición para listar los planes de un paciente
+     Given existe un plan activo
+    returns a response which
+      has status code 200 (OK)
+      includes headers "Content-Type" with value "application/json" (OK)
+      has a matching body (OK)
+  una petición para obtener un plan existente ...                      (OK)
+  una petición para obtener un plan que no existe  → 404 ...           (OK)
+```
+
+**Prueba negativa.** Si el consumer pasa a esperar `estado_plan` en vez de
+`estado`, la verificación falla con:
+
+```
+$.estado_plan -> Actual map is missing the following keys: estado_plan
+```
+
+Esto es justo lo que el contract testing debe detectar: un cambio en un lado que
+el otro lado no soporta.
+
+### 11.5 Entorno para IA: `pact-writer`
+
+| Pieza | Ruta |
+|---|---|
+| Subagente | `.claude/agents/pact-writer.md` |
+| Skill | `.claude/skills/contract-testing-plan-nutricional/SKILL.md` |
+| Guardián | `tests/contract/test_convenciones_contrato.py` (12 tests) |
+
+El guardián comprueba automáticamente que:
+
+- cada pact tiene al menos 2 interacciones;
+- todas las interacciones tienen su provider state;
+- las respuestas usan matchers;
+- los tests consumer usan el cliente real (sin mocks ni `httpx` directo);
+- cada estado tiene handler;
+- la app del provider solo aísla por rollback;
+- la ruta de estados nunca aparece en `src/`.
+
+El agente, además, tiene que ejecutar la prueba negativa y comparar el conteo de
+filas de la base antes y después.
+
+### 11.6 Problemas encontrados
+
+- **Falso `Missing request` en Windows.** El núcleo Rust de Pact puede responder
+  antes de registrar la petición. `mock_server(pact)` espera la coincidencia antes
+  de cerrar el mock.
+- **`match.date` usa formato strftime** (`%Y-%m-%d`). Con `yyyy-MM-dd`, el
+  provider falla aunque la fecha sea correcta.
+- **Los `Decimal` se serializan como cadena** (`"2000.00"`), por eso se validan
+  con `match.regex`.

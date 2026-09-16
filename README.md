@@ -279,7 +279,7 @@ con implementaciones mock para desarrollo:
 
 | Dato | Origen | Interfaz | Mock actual |
 |---|---|---|---|
-| Datos del paciente (nombre, código) | **ms-pacientes** (BC1) | `PacienteGateway` | Pendiente — infraestructura no implementada |
+| Datos del paciente (nombre, código) | **ms-pacientes** (BC1) | `PacienteGateway` | `PacienteGatewayMock` · adaptador real `PacienteGatewayHttp` con contrato Pact |
 | Confirmación de contrato activo | **ms-contratos** (BC4) | referenciado por ID (UUID) | campo `paciente_id` en `PlanNutricional` |
 
 Cuando los microservicios externos estén disponibles, basta reemplazar los mocks por implementaciones HTTP
@@ -371,8 +371,8 @@ docker exec -it plan_nutricional_db psql -U postgres -d db_plan_nutricional
 
 ## Pruebas y Cobertura
 
-La suite recoge **dos talleres**: pruebas unitarias (`tests/unit/`) y pruebas de
-integración (`tests/integration/`).
+La suite recoge **tres talleres**: pruebas unitarias (`tests/unit/`), pruebas de
+integración (`tests/integration/`) y pruebas de contrato con Pact (`tests/contract/`).
 
 ```bash
 # Instalar dependencias (grupo dev: pytest, pytest-asyncio, pytest-cov, httpx)
@@ -395,7 +395,8 @@ uv run pytest --cov --cov-report=term-missing --cov-report=html
 | Capa de Aplicación | 28 tests — casos de uso con **mocks** de los repositorios (`AsyncMock(spec=...)`) |
 | Integración (API + BD) | 21 tests — `httpx.AsyncClient` contra la app FastAPI real y PostgreSQL, **sin mocks** |
 | Entorno de pruebas | 13 tests que validan las reglas del propio entorno de integración (ver `tests/README.md` §9) |
-| Cobertura | 79 % de todo el microservicio (las cuatro capas) |
+| Contratos (Pact) | 5 interacciones consumer en 2 relaciones · 1 verificación de provider · 12 tests del guardián |
+| Cobertura | 80 % de todo el microservicio (las cuatro capas) · 195 tests |
 
 **Pruebas unitarias.** No requieren PostgreSQL: los repositorios se sustituyen
 por mocks, de modo que se ejecutan aisladas de la infraestructura.
@@ -435,6 +436,24 @@ prohibido modificar `src/` para hacer pasar un test, y
 nadie introduzca mocks en integración, borre datos de la base o rompa el
 aislamiento transaccional. Detalle completo en `tests/README.md` §9.
 
+**Contract testing con Pact.** `tests/contract/` aplica el taller de contract
+testing con `pact-python` v3, en los dos roles:
+
+| Relación | Rol de este servicio | Interacciones | Estado |
+|---|---|---|---|
+| `app-paciente` → `ms-plan-nutricional` | **Provider** | `GET /planes/{id}` (200 y 404), `GET /planes/paciente/{id}` | ✅ Verificado contra la API real + PostgreSQL (con rollback) |
+| `ms-plan-nutricional` → `ms-pacientes` | **Consumer** (`PacienteGatewayHttp`) | `GET /pacientes/{id}` (200 y 404) | ⏳ Pact generado; lo verifica el equipo de ms-pacientes |
+
+```bash
+uv run pytest tests/contract/consumer -v    # genera pacts/*.json
+uv run pytest tests/contract/provider -v    # el provider verifica el contrato
+```
+
+El subagente `pact-writer` y la skill `contract-testing-plan-nutricional`
+extienden el entorno para IA a los contratos, y
+`tests/contract/test_convenciones_contrato.py` valida sus reglas. Detalle en
+`tests/README.md` §11.
+
 Ver **[tests/README.md](tests/README.md)** para el detalle: qué es un mock y cómo
 se usa aquí, el patrón AAA, el inventario completo de la suite, cómo se montan las
 pruebas de integración y los hallazgos.
@@ -450,11 +469,12 @@ pruebas de integración y los hallazgos.
 | Capa de Aplicación (casos de uso, queries) | Completo |
 | Pruebas unitarias | 143 tests (dominio + casos de uso) · `pytest` + `unittest.mock` |
 | Pruebas de integración | 21 tests sobre `/planes` (API + PostgreSQL reales, sin dejar datos) · `httpx` + colección Postman · cobertura total 79 % |
-| Entorno de pruebas para IA | 2 subagentes (`test-writer`, `integration-test-writer`) + 2 skills + guardián automático de 13 tests |
+| Pruebas de contrato | Pact v3: `app-paciente` → este servicio (verificado) y este servicio → `ms-pacientes` (pact generado) |
+| Entorno de pruebas para IA | 3 subagentes (`test-writer`, `integration-test-writer`, `pact-writer`) + 3 skills + 2 guardianes automáticos (13 + 12 tests) |
 | API REST (FastAPI, endpoints, schemas) | Completo — `/planes`, `/catalogo-recetas`, `/plantillas` |
 | Persistencia | PostgreSQL 16 vía SQLAlchemy async (activo) |
 | Mensajería | Pendiente |
-| Gateway Pacientes | Pendiente — interfaz `PacienteGateway` definida, mock no implementado |
+| Gateway Pacientes | `PacienteGatewayHttp` implementado y cubierto por contrato Pact (aún no cableado en los casos de uso) |
 | Base de datos | DDL en `bd-ms-plan-nutricional.sql` · se crea automáticamente con Docker |
 
 ---
