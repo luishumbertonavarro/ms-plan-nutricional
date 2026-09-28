@@ -170,3 +170,65 @@ def test_la_lista_de_dias_es_una_copia_defensiva(construir_plantilla):
 
     # Assert
     assert len(plantilla.dias) == 1
+
+
+# ---------------------------------------------------------------------------
+# Rehidratación desde el repositorio
+# ---------------------------------------------------------------------------
+
+def test_rehidratar_una_plantilla_por_constructor_conserva_su_identidad_y_sus_dias():
+    """El repositorio no usa `crear`: reconstruye el agregado con `__init__`.
+
+    Es un camino distinto al de la factoría y merece su propia prueba, porque el
+    repositorio lo recorre en cada lectura de la base de datos.
+    """
+    # Arrange
+    plantilla_id = uuid4()
+    original = PlantillaPlan.crear(
+        nombre="Plantilla hipocalórica",
+        descripcion="Base de 15 días",
+        duracion=DuracionPlan(dias=15),
+    )
+    original.agregar_dia(1)
+
+    # Act
+    rehidratada = PlantillaPlan(
+        id=plantilla_id,
+        nombre="Plantilla hipocalórica",
+        descripcion="Base de 15 días",
+        duracion=DuracionPlan(dias=15),
+        dias=original.dias,
+    )
+
+    # Assert
+    assert rehidratada.id == plantilla_id
+    assert rehidratada.nombre == "Plantilla hipocalórica"
+    assert rehidratada.descripcion == "Base de 15 días"
+    assert rehidratada.duracion.dias == 15
+    assert [d.numero_dia for d in rehidratada.dias] == [1]
+
+
+def test_rehidratar_una_plantilla_no_revalida_el_nombre_a_diferencia_de_crear():
+    """Asimetría real del modelo, documentada aquí en vez de corregida.
+
+    `PlantillaPlan.crear` rechaza un nombre en blanco; el constructor de
+    rehidratación no valida nada, porque asume que los datos que vienen de la
+    base ya pasaron por la factoría en su día.
+    """
+    # Arrange / Act
+    rehidratada = PlantillaPlan(
+        id=uuid4(),
+        nombre="",
+        descripcion="Vino así desde la base de datos",
+        duracion=DuracionPlan(dias=30),
+        dias=[],
+    )
+
+    # Assert — el constructor la acepta...
+    assert rehidratada.nombre == ""
+
+    # ...mientras que la factoría la habría rechazado
+    with pytest.raises(ValueError):
+        PlantillaPlan.crear(
+            nombre="", descripcion="Sin nombre", duracion=DuracionPlan(dias=30)
+        )

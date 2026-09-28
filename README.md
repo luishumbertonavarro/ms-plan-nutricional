@@ -385,20 +385,36 @@ uv run pytest -q
 uv run pytest tests/unit -q
 uv run pytest tests/integration -v
 
-# Con medición de cobertura (terminal + reporte HTML en htmlcov/)
-uv run pytest --cov --cov-report=term-missing --cov-report=html
+# COBERTURA DE LA CAPA UNITARIA — el reporte oficial (umbral: 80 %)
+uv run pytest tests/unit --cov --cov-report=term-missing \
+    --cov-report=html:htmlcov-unit --cov-report=xml:coverage-unit.xml
+
+# Cobertura de la suite completa (requiere PostgreSQL levantado)
+uv run pytest --cov --cov-report=term-missing --cov-report=html:htmlcov
 ```
 
 | Alcance | Detalle |
 |---|---|
-| Capa de Dominio | 115 tests — Value Objects, invariantes de los agregados, ciclo de vida del plan |
-| Capa de Aplicación | 28 tests — casos de uso con **mocks** de los repositorios (`AsyncMock(spec=...)`) |
+| Capa de Dominio | 121 tests — Value Objects, invariantes de los agregados, ciclo de vida del plan |
+| Capa de Aplicación | 102 tests — los 22 casos de uso y los 7 query handlers, con **mocks** de los repositorios (`AsyncMock(spec=...)`) |
+| Presentación (sin I/O) | 36 tests — mappers dominio→Pydantic, tabla excepción→HTTP y composición de la app |
+| Infraestructura (sin I/O) | 5 tests — gateway de pacientes, determinista y sin red |
 | Integración (API + BD) | 21 tests — `httpx.AsyncClient` contra la app FastAPI real y PostgreSQL, **sin mocks** |
 | Entorno de pruebas | 13 tests que validan las reglas del propio entorno de integración (ver `tests/README.md` §9) |
-| Cobertura | 79 % de todo el microservicio (las cuatro capas) |
+| **Cobertura de la capa unitaria** | **84 %** de todo el microservicio, sin base de datos — evidencia en `htmlcov-unit/` y `coverage-unit.xml` |
+| Cobertura de la suite completa | 89 %, con PostgreSQL levantado |
+
+`pyproject.toml` fija `fail_under = 80`: la suite falla si la cobertura cae por
+debajo del mínimo exigido. Los dos números no miden lo mismo y `tests/README.md`
+§7.3 explica la diferencia — parte de lo que la capa unitaria cubre de
+`infrastructure/` y `presentation/` es **cableado** (declaraciones de ruta,
+columnas del ORM, campos Pydantic), mientras que los cuerpos de los repositorios
+y de los endpoints solo los recorren las pruebas de integración.
 
 **Pruebas unitarias.** No requieren PostgreSQL: los repositorios se sustituyen
-por mocks, de modo que se ejecutan aisladas de la infraestructura.
+por mocks, de modo que se ejecutan aisladas de la infraestructura. Cubren el
+dominio y la aplicación al 100 %, y además la parte de `presentation/` e
+`infrastructure/` que no hace I/O (funciones puras y cableado).
 
 **Pruebas de integración.** Recorren el camino completo
 `HTTP → router → caso de uso → repositorio → PostgreSQL → HTTP` sobre el agregado
@@ -448,13 +464,13 @@ pruebas de integración y los hallazgos.
 | Capa de Dominio (AR, Entidades, VOs, Excepciones) | Completo — incluye `PlanNutricional`, `RecetaCatalogo` y `PlantillaPlan` |
 | Interfaces de Repositorio y Gateway | Completo |
 | Capa de Aplicación (casos de uso, queries) | Completo |
-| Pruebas unitarias | 143 tests (dominio + casos de uso) · `pytest` + `unittest.mock` |
-| Pruebas de integración | 21 tests sobre `/planes` (API + PostgreSQL reales, sin dejar datos) · `httpx` + colección Postman · cobertura total 79 % |
+| Pruebas unitarias | 264 tests (dominio, casos de uso, mappers, manejadores de excepción, composición y gateways) · `pytest` + `unittest.mock` · **84 % de cobertura**, umbral `fail_under = 80` |
+| Pruebas de integración | 21 tests sobre `/planes` (API + PostgreSQL reales, sin dejar datos) · `httpx` + colección Postman · cobertura de la suite completa 89 % |
 | Entorno de pruebas para IA | 2 subagentes (`test-writer`, `integration-test-writer`) + 2 skills + guardián automático de 13 tests |
 | API REST (FastAPI, endpoints, schemas) | Completo — `/planes`, `/catalogo-recetas`, `/plantillas` |
 | Persistencia | PostgreSQL 16 vía SQLAlchemy async (activo) |
 | Mensajería | Pendiente |
-| Gateway Pacientes | Pendiente — interfaz `PacienteGateway` definida, mock no implementado |
+| Gateway Pacientes | Parcial — interfaz `PacienteGateway` definida y `PacienteGatewayMock` implementado y probado; falta la implementación HTTP real contra `ms-pacientes` |
 | Base de datos | DDL en `bd-ms-plan-nutricional.sql` · se crea automáticamente con Docker |
 
 ---

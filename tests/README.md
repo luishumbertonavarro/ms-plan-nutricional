@@ -3,12 +3,14 @@
 Suite de pruebas del BC3 – Planificación Nutricional. Recoge dos talleres
 aplicados al caso de estudio del proyecto final:
 
-- **Taller de Unit Tests** → `tests/unit/` — 143 tests, sin base de datos.
+- **Taller de Unit Tests** → `tests/unit/` — 264 tests, sin base de datos.
 - **Taller de Integration Tests** → `tests/integration/` — 21 tests contra la API
   y PostgreSQL reales, más 13 que validan el propio entorno
   (ver [sección 10](#10-pruebas-de-integración)).
 
-**177 tests · 79 % de cobertura.**
+**298 tests · 84 % de cobertura solo con las unitarias · 89 % con la suite
+completa** (ver [sección 7](#7-cobertura), que explica por qué son dos números y
+no uno).
 
 ---
 
@@ -16,15 +18,21 @@ aplicados al caso de estudio del proyecto final:
 
 | Capa | Pruebas unitarias | Pruebas de integración |
 |---|---|---|
-| `domain/` | **Sí** — 115 tests, con objetos reales | Indirectamente, a través de la API |
-| `application/use_cases/` | **Sí** — 28 tests, repositorios mockeados | Indirectamente, a través de la API |
-| `infrastructure/` | No — requiere PostgreSQL | **Sí** — mapeo ORM ↔ dominio y `commit`/`rollback` |
-| `presentation/` | No — es la frontera HTTP | **Sí** — routers, `Depends` y manejadores de excepción |
+| `domain/` | **Sí** — 121 tests, con objetos reales | Indirectamente, a través de la API |
+| `application/use_cases/` | **Sí** — 102 tests, repositorios mockeados | Indirectamente, a través de la API |
+| `infrastructure/` — gateways | **Sí** — 5 tests, el mock no hace red | — |
+| `infrastructure/` — repositorios | No — requiere PostgreSQL | **Sí** — mapeo ORM ↔ dominio y `commit`/`rollback` |
+| `presentation/` — mappers, excepciones, composición | **Sí** — 36 tests, sin HTTP ni base de datos | — |
+| `presentation/` — cuerpos de endpoint | No — es la frontera HTTP | **Sí** — routers, `Depends` y errores en petición real |
 
 La división es deliberada: **cada capa se prueba con la herramienta que le
 corresponde.** Las reglas de negocio se verifican una sola vez, en las unitarias,
 donde son rápidas de escribir y de ejecutar; las de integración no las repiten,
 sino que comprueban el *cableado* entre capas, que es justo lo que un mock oculta.
+
+Lo que decide la frontera no es la capa, sino el **I/O**. Un mapper es una
+función pura y se prueba como tal aunque viva en `presentation/`; el cuerpo de
+un endpoint necesita una petición real y una sesión, y por eso es integración.
 
 Desde el taller de integración, `infrastructure/` y `presentation/` **ya no están
 excluidas** de la medición de cobertura en `pyproject.toml`.
@@ -61,23 +69,29 @@ uv run pytest -k "duplicado" -v
 >
 > **Las de integración sí lo necesitan**, pero no rompen la suite si falta: se
 > marcan como `skipped`. Con la base apagada, `uv run pytest` reporta
-> `156 passed, 21 skipped`.
+> `277 passed, 21 skipped`.
 
 ### Cobertura
 
 ```bash
-uv run pytest --cov --cov-report=term-missing --cov-report=html
+# Reporte OFICIAL del taller: la capa unitaria, sin base de datos (>= 80 %)
+uv run pytest tests/unit --cov --cov-report=term-missing \
+    --cov-report=html:htmlcov-unit --cov-report=xml:coverage-unit.xml
+
+# Reporte de la suite completa (requiere PostgreSQL levantado)
+uv run pytest --cov --cov-report=term-missing --cov-report=html:htmlcov
 ```
 
-El reporte HTML queda en `htmlcov/index.html`:
+El reporte HTML de la capa unitaria queda en `htmlcov-unit/index.html` y está
+versionado en el repositorio:
 
 ```powershell
-Start-Process .\htmlcov\index.html    # Windows
+Start-Process .\htmlcov-unit\index.html    # Windows
 ```
 
 ```bash
-open htmlcov/index.html               # macOS
-xdg-open htmlcov/index.html           # Linux
+open htmlcov-unit/index.html               # macOS
+xdg-open htmlcov-unit/index.html           # Linux
 ```
 
 ---
@@ -97,13 +111,30 @@ tests/
 │   │   ├── test_plan_dia.py
 │   │   ├── test_tiempo_comida.py
 │   │   ├── test_receta_catalogo.py
+│   │   ├── test_receta.py
 │   │   └── test_plantilla_plan.py
-│   └── application/            # espeja src/plan_nutricional/application/use_cases/
-│       ├── test_crear_plan.py
-│       ├── test_agregar_dia.py
-│       ├── test_cambiar_estado_plan.py
-│       ├── test_agregar_receta_desde_catalogo.py
-│       └── test_crear_plan_desde_plantilla.py
+│   ├── application/            # espeja src/plan_nutricional/application/use_cases/
+│   │   ├── test_crear_plan.py          ·  test_agregar_dia.py
+│   │   ├── test_eliminar_dia.py        ·  test_cambiar_estado_plan.py
+│   │   ├── test_agregar_tiempo_comida.py    ·  test_eliminar_tiempo_comida.py
+│   │   ├── test_agregar_receta.py      ·  test_eliminar_receta.py
+│   │   ├── test_agregar_receta_desde_catalogo.py
+│   │   ├── test_modificar_recomendacion.py
+│   │   ├── test_crear_plan_desde_plantilla.py
+│   │   ├── test_crear_receta_catalogo.py    ·  test_actualizar_receta_catalogo.py
+│   │   ├── test_cambiar_estado_receta_catalogo.py
+│   │   ├── test_crear_plantilla.py
+│   │   ├── test_agregar_plantilla_dia.py    ·  test_eliminar_plantilla_dia.py
+│   │   ├── test_agregar_plantilla_tiempo_comida.py
+│   │   ├── test_eliminar_plantilla_tiempo_comida.py
+│   │   ├── test_agregar_plantilla_receta.py ·  test_eliminar_plantilla_receta.py
+│   │   └── test_queries.py · test_catalogo_queries.py · test_plantilla_queries.py
+│   ├── presentation/           # solo lo que NO hace I/O
+│   │   ├── test_mappers.py               # funciones puras dominio → Pydantic
+│   │   ├── test_exception_handlers.py    # tabla excepción → (status, tipo)
+│   │   └── test_composicion_de_la_app.py # routers, OpenAPI, inyección, engine
+│   └── infrastructure/
+│       └── test_paciente_gateway_mock.py # gateway determinista, sin red
 └── integration/                # no espeja src/: se organiza por flujo, no por capa
     ├── conftest.py             # motor, transacción reversible y cliente HTTP
     ├── test_planes_api_flujo_correcto.py
@@ -261,66 +292,153 @@ completa de transiciones de estado (7 combinaciones inválidas) en un solo test.
 
 ## 6. Inventario de la suite
 
+### Capa unitaria — 264 tests
+
 | Archivo | Tests | Qué cubre |
 |---|---|---|
-| `unit/domain/test_plan_nutricional.py` | 42 | Aggregate Root: duración, duplicados, copias defensivas, ciclo de vida |
+| `unit/domain/test_plan_nutricional.py` | 43 | Aggregate Root: duración, duplicados, copias defensivas, ciclo de vida, propiedades |
 | `unit/domain/test_value_objects.py` | 30 | Los 4 VO: validaciones, inmutabilidad, igualdad por valor |
-| `unit/domain/test_plantilla_plan.py` | 16 | Plantilla: días, tiempos, recetas del catálogo |
+| `unit/domain/test_plantilla_plan.py` | 18 | Plantilla: días, tiempos, recetas del catálogo, rehidratación por constructor |
 | `unit/domain/test_tiempo_comida.py` | 10 | Recetas duplicadas (case-insensitive), eliminación |
 | `unit/domain/test_receta_catalogo.py` | 9 | Catálogo: creación, actualización, activar/desactivar |
 | `unit/domain/test_plan_dia.py` | 8 | Tiempos de comida duplicados y no encontrados |
-| `unit/application/test_crear_plan.py` | 6 | Creación y validaciones que abortan la persistencia |
-| `unit/application/test_agregar_receta_desde_catalogo.py` | 6 | Dos mocks, tres ramas de error, porción por defecto |
-| `unit/application/test_crear_plan_desde_plantilla.py` | 6 | Tres mocks, `side_effect`, `assert_has_awaits` |
-| `unit/application/test_agregar_dia.py` | 5 | Patrón de referencia de mocking |
-| `unit/application/test_cambiar_estado_plan.py` | 5 | Transiciones inválidas sin persistencia parcial |
-| **Subtotal unitarias** | **143** | |
+| `unit/domain/test_receta.py` | 3 | Entidad hoja: identidad y reemplazo de la porción |
+| **Subtotal dominio** | **121** | |
+| `unit/application/` — 22 archivos, uno por caso de uso | 102 | Los 22 casos de uso y los 7 query handlers: camino feliz + **todas** las ramas de error, siempre con `guardar.assert_not_awaited()` |
+| **Subtotal aplicación** | **102** | |
+| `unit/presentation/test_exception_handlers.py` | 23 | Tabla excepción de dominio → `(status, tipo)`, y que ninguna excepción se quede sin manejador |
+| `unit/presentation/test_mappers.py` | 8 | Las 9 funciones dominio → Pydantic: aplanado de VO y jerarquía anidada |
+| `unit/presentation/test_composicion_de_la_app.py` | 5 | Routers montados, contrato OpenAPI, inyección por puerto, engine ↔ settings |
+| `unit/infrastructure/test_paciente_gateway_mock.py` | 5 | Gateway de pacientes: determinismo y cumplimiento del puerto |
+| **Subtotal presentación + infraestructura** | **41** | |
+
+Archivos del bloque de aplicación: `test_crear_plan`, `test_agregar_dia`,
+`test_eliminar_dia`, `test_agregar_tiempo_comida`, `test_eliminar_tiempo_comida`,
+`test_agregar_receta`, `test_eliminar_receta`, `test_agregar_receta_desde_catalogo`,
+`test_modificar_recomendacion`, `test_cambiar_estado_plan`,
+`test_crear_plan_desde_plantilla`, `test_crear_receta_catalogo`,
+`test_actualizar_receta_catalogo`, `test_cambiar_estado_receta_catalogo`,
+`test_crear_plantilla`, `test_agregar_plantilla_dia`, `test_eliminar_plantilla_dia`,
+`test_agregar_plantilla_tiempo_comida`, `test_eliminar_plantilla_tiempo_comida`,
+`test_agregar_plantilla_receta`, `test_eliminar_plantilla_receta`, más
+`test_queries`, `test_catalogo_queries` y `test_plantilla_queries`.
+
+### Capa de integración — 34 tests
+
+| Archivo | Tests | Qué cubre |
+|---|---|---|
 | `integration/test_planes_api_flujo_incorrecto.py` | 13 | Errores 404 / 409 / 422 y ausencia de escritura tras el fallo |
 | `integration/test_convenciones_del_entorno.py` | 13 | Guardián: mocks, borrados, aislamiento, naming, Postman |
 | `integration/test_planes_api_flujo_correcto.py` | 8 | Ciclo de vida completo del plan, consultas y aislamiento |
-| **Subtotal integración** | **34** | |
-| **Total** | **177** | |
+
+**Total: 298 tests.**
 
 ---
 
 ## 7. Cobertura
 
-Resultado de `uv run pytest --cov --cov-report=term-missing` con PostgreSQL
-levantado:
+El taller pide que **la capa de unit tests** cubra al menos el 80 % del código.
+Por eso hay dos mediciones distintas, y conviene no confundirlas.
+
+### 7.1 Reporte oficial — solo unitarias
+
+```powershell
+uv run pytest tests/unit --cov --cov-report=term-missing `
+    --cov-report=html:htmlcov-unit --cov-report=xml:coverage-unit.xml
+```
+
+No necesita PostgreSQL. Resultado: **84 %** (1714 statements + 178 ramas; 236
+statements sin cubrir).
 
 | Módulo | Cobertura |
 |---|---|
-| `domain/model/plan_nutricional.py` | 100 % |
-| `domain/model/value_objects.py` | 100 % |
-| `domain/model/receta_catalogo.py` | 100 % |
+| Todo `domain/` (modelo, VO, excepciones, puertos, gateways) | 100 % |
+| Todo `application/` (22 casos de uso, 7 query handlers, commands, queries) | 100 % |
+| `presentation/api/schemas/schemas.py` · `mappers.py` | 100 % |
+| `presentation/api/exception_handlers.py` | 100 % |
 | `infrastructure/persistence/orm_models.py` | 100 % |
-| `presentation/api/schemas/schemas.py` | 100 % |
-| `domain/model/tiempo_comida.py` | 98 % |
-| `domain/model/plan_dia.py` | 98 % |
-| `domain/model/plantilla_plan.py` | 88 % |
-| `presentation/api/exception_handlers.py` | 83 % |
-| `infrastructure/persistence/plan_repository_impl.py` | 83 % |
-| `presentation/api/routers/planes.py` | 76 % |
+| `infrastructure/config/settings.py` · `gateways/paciente_gateway_mock.py` | 100 % |
+| `presentation/api/main.py` | 85 % |
+| `presentation/api/routers/planes.py` | 50 % |
 | `presentation/api/routers/plantillas.py` | 53 % |
 | `presentation/api/routers/catalogo_recetas.py` | 52 % |
-| **Total** | **79 %** |
+| `infrastructure/persistence/database.py` | 46 % |
+| `infrastructure/persistence/receta_catalogo_repository_impl.py` | 35 % |
+| `infrastructure/persistence/plan_repository_impl.py` | 22 % |
+| `infrastructure/persistence/plantilla_plan_repository_impl.py` | 22 % |
+| **Total** | **84 %** |
 
-El total **baja** de 82 % a 79 % respecto al taller anterior, y eso es una buena
-señal, no un retroceso: antes se medían solo dos capas de cuatro. Ahora se mide
-todo el microservicio, y los módulos con menor cobertura señalan con exactitud lo
-que falta por cubrir — los routers de catálogo y plantillas, que quedaron fuera
-del alcance de este avance.
+El reporte HTML versionado está en `htmlcov-unit/index.html` y el XML en
+`coverage-unit.xml`. Son la evidencia que acompaña a la presentación.
 
-Dos decisiones sobre la configuración (`pyproject.toml`):
+### 7.2 Reporte de la suite completa
 
-- **No hay `fail_under`.** La cobertura se mide y se reporta, pero no hace fallar
-  la suite. Es coherente con un avance del taller que no pretende ser exhaustivo:
-  un umbral obligaría a escribir tests de relleno para pasar el corte.
-- **`htmlcov/` y `.coverage` están en `.gitignore`.** Son artefactos regenerables
-  con un comando; no se versionan. Para presentar evidencia basta una captura del
-  reporte HTML o del resumen en terminal.
+```powershell
+docker compose -f ms-plan-nutricional-docker-compose.yml up -d
+uv run pytest --cov --cov-report=term-missing --cov-report=html:htmlcov
+```
+
+Con las 21 pruebas de integración ejecutándose de verdad: **89 %**. Sube sobre
+todo `plan_repository_impl.py` (22 % → 83 %) y `routers/planes.py` (50 % → 76 %),
+que es exactamente lo que esas pruebas recorren.
+
+### 7.3 Cobertura de cableado vs. cobertura de comportamiento
+
+Esta distinción importa más que el número.
+
+La suite unitaria **importa** `presentation.api.main`, y ese import arrastra los
+routers, los repositorios, el ORM y los esquemas. Las líneas de módulo de esos
+ficheros — declaraciones de ruta, columnas del ORM, campos Pydantic, imports —
+se ejecutan al importarse y cuentan como cubiertas. Eso es **cobertura de
+cableado**: verifica que el microservicio se ensambla, no que sus repositorios
+guarden bien.
+
+Los tests de `unit/presentation/test_composicion_de_la_app.py` afirman
+explícitamente ese cableado (routers montados, OpenAPI generable, inyección por
+puerto), así que el número está respaldado por aserciones y no es un import
+suelto. Pero **el comportamiento** de los repositorios y de los endpoints solo lo
+prueban las de integración.
+
+Lo que la capa unitaria no puede cubrir por definición — 236 statements, el
+12,5 % del total:
+
+| Qué queda fuera | Statements | Por qué |
+|---|---|---|
+| `plan_repository_impl` (cuerpos) | 64 | SQL real contra PostgreSQL |
+| `plantilla_plan_repository_impl` (cuerpos) | 58 | ídem |
+| `receta_catalogo_repository_impl` (cuerpos) | 20 | ídem |
+| Cuerpos de los endpoints de los 3 routers | 84 | requieren una petición HTTP |
+| `database.get_db_session` | 7 | abre sesión, `commit` / `rollback` |
+| `main.lifespan` | 3 | solo se ejecuta con el servidor arrancado |
+
+Por eso el techo de la capa unitaria es exactamente el 84 % que se alcanza: no
+falta trabajo, falta base de datos. Subir de ahí exigiría mockear `AsyncSession`
+o levantar un cliente HTTP en `tests/unit/`, que es justo lo que las
+convenciones del proyecto prohíben.
+
+### 7.4 Umbral
+
+`pyproject.toml` fija `fail_under = 80` en `[tool.coverage.report]`: la suite
+falla si la cobertura cae por debajo del mínimo del taller. Se aplica a
+cualquier invocación con `--cov`, así que medir una sola subcarpeta
+(`tests/unit/domain --cov`) fallará aunque sus tests pasen — el denominador
+sigue siendo el paquete entero. **La medición oficial es siempre `tests/unit`
+completo.**
+
+`.coverage` y `htmlcov/` siguen en `.gitignore` por regenerables;
+`htmlcov-unit/` y `coverage-unit.xml` **sí** se versionan, porque son el
+entregable.
+
+> **Al regenerar `htmlcov-unit/`, borra el `.gitignore` que crea coverage.py
+> dentro de la carpeta.** La herramienta escribe siempre un
+> `htmlcov-unit/.gitignore` con `*`, que haría invisible el reporte para git:
+>
+> ```powershell
+> Remove-Item .\htmlcov-unit\.gitignore
+> ```
 
 ---
+
 
 ## 8. Hallazgo documentado
 
@@ -578,7 +696,7 @@ uv run pytest
 ```
 
 Sin Docker no falla nada: la fixture detecta que PostgreSQL no responde y hace
-`pytest.skip`, con lo que `uv run pytest` reporta `156 passed, 21 skipped`.
+`pytest.skip`, con lo que `uv run pytest` reporta `277 passed, 21 skipped`.
 El guardián del entorno sigue corriendo, porque no toca la base.
 
 Para apuntar a otro servidor, `TEST_DATABASE_URL` tiene prioridad sobre

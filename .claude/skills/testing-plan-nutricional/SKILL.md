@@ -11,7 +11,9 @@ description: Convenciones de testing de ms-plan-nutricional — patrón AAA, nam
 |---|---|---|
 | Value Object, entidad, Aggregate Root | `tests/unit/domain/` | ninguno — objetos reales |
 | Caso de uso (`use_cases/*.py`) | `tests/unit/application/` | `AsyncMock(spec=<PuertoABC>)` |
-| Repositorios, routers, ORM, mapeo de errores a HTTP | `tests/integration/` | ninguno — PostgreSQL real |
+| Mappers, tabla excepción→HTTP, composición de la app | `tests/unit/presentation/` | ninguno — funciones puras y `FastAPI()` desnudo, **sin base de datos** |
+| Gateways hacia otros bounded contexts | `tests/unit/infrastructure/` | ninguno — el mock es determinista, no hace red |
+| **Cuerpos** de endpoint y SQL de los repositorios | `tests/integration/` | ninguno — PostgreSQL real |
 
 Fixtures compartidas: `tests/conftest.py` (unitarias),
 `tests/integration/conftest.py` (integración — son mundos separados: las de
@@ -19,9 +21,27 @@ integración no usan los builders ni los mocks de las unitarias).
 
 **Regla para elegir:** si lo que se prueba es una *regla de negocio*, va en
 `tests/unit/` con mocks. Si lo que se prueba es el *cableado entre capas* — que
-el ORM persiste bien, que un error de dominio sale como 409, que el `rollback`
-funciona — va en `tests/integration/`. Nunca se repite una regla de negocio en
-integración: ahí ya está cubierta y el test sería más lento sin aportar nada.
+el ORM persiste bien, que un error de dominio sale como 409 en una petición
+real, que el `rollback` funciona — va en `tests/integration/`. Nunca se repite
+una regla de negocio en integración: ahí ya está cubierta y el test sería más
+lento sin aportar nada.
+
+**Matiz sobre `presentation/` e `infrastructure/`.** Que una capa sea "externa"
+no la convierte automáticamente en territorio de integración. Lo que marca la
+frontera es si hace **I/O**:
+
+- `schemas/mappers.py` son funciones puras dominio→Pydantic. Unitarias.
+- Los manejadores de `exception_handlers.py` son closures sin `request`; se
+  recuperan de `app.exception_handlers[<Excepcion>]` sobre un `FastAPI()` vacío
+  y se invocan directamente. Unitarias. Que FastAPI **enrute** de verdad esa
+  excepción durante una petición sigue siendo integración.
+- `PacienteGatewayMock` deriva datos del UUID, sin red. Unitaria.
+- Un repositorio ejecutando SQL o un endpoint atendiendo HTTP: integración,
+  siempre.
+
+**Prohibido en `tests/unit/`:** doblar `AsyncSession`, simular resultados de
+SQLAlchemy o levantar un cliente HTTP. Si un test necesita cualquiera de esas
+tres cosas, está en la carpeta equivocada.
 
 Ver la sección 8 para el patrón de las pruebas de integración.
 
@@ -155,15 +175,33 @@ uv run pytest tests/unit/domain/test_plan_nutricional.py -v
 # Filtrar por nombre
 uv run pytest -k "duplicado" -v
 
-# Cobertura: terminal + reporte HTML
-uv run pytest --cov --cov-report=term-missing --cov-report=html
+# COBERTURA DE LA CAPA UNITARIA — la medición oficial del taller (>= 80 %)
+uv run pytest tests/unit --cov --cov-report=term-missing `
+    --cov-report=html:htmlcov-unit --cov-report=xml:coverage-unit.xml
+Start-Process .\htmlcov-unit\index.html
+
+# Cobertura de la suite completa (requiere PostgreSQL levantado)
+uv run pytest --cov --cov-report=term-missing --cov-report=html:htmlcov
 Start-Process .\htmlcov\index.html
 ```
 
 Cobertura configurada en `pyproject.toml`: mide el paquete `plan_nutricional`
 completo — desde el taller de integración ya no se excluyen `infrastructure/` ni
-`presentation/`; solo se omiten los `__init__.py`. No hay umbral `fail_under`: la
-cobertura se mide y se reporta, no bloquea la suite.
+`presentation/`; solo se omiten los `__init__.py`.
+
+**Umbral `fail_under = 80`.** La suite falla si la cobertura baja del mínimo
+exigido. Se aplica a *cualquier* invocación con `--cov`, así que medir una sola
+subcarpeta (`tests/unit/domain --cov`) fallará aunque sus tests pasen: no es un
+error, es que el denominador sigue siendo el paquete entero. La medición oficial
+es siempre `tests/unit` completo.
+
+**Dos números, dos significados.** `tests/unit` da ~84 % y la suite completa
+~89 %. La diferencia no es ruido: parte de la cobertura que aporta la suite
+unitaria sobre `infrastructure/` y `presentation/` es **de cableado** (líneas de
+módulo: declaraciones de ruta, columnas del ORM, campos Pydantic, que se
+ejecutan al importar). Los *cuerpos* de los repositorios y de los endpoints solo
+los recorren las pruebas de integración. Al reportar cobertura, no presentes el
+84 % como si los repositorios estuvieran probados.
 
 ## 7. Errores frecuentes
 

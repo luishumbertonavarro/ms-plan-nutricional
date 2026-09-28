@@ -450,3 +450,34 @@ def test_constructor_rehidrata_un_plan_con_todos_sus_datos():
     assert plan.paciente_id == paciente_id
     assert plan.estado is EstadoPlan.FINALIZADO
     assert plan.duracion.dias == 15
+
+
+def test_un_plan_recien_creado_expone_todos_sus_datos_de_cabecera(necesidad):
+    """Las propiedades de solo lectura son el contrato que consume el mapper.
+
+    Se comprueban juntas porque forman una sola unidad de comportamiento: lo que
+    el agregado publica hacia fuera tras la creación.
+    """
+    # Arrange
+    paciente_id = uuid4()
+    fecha_inicio = date(2026, 1, 1)
+
+    # Act
+    plan = PlanNutricional.crear(
+        paciente_id=paciente_id,
+        fecha_inicio=fecha_inicio,
+        duracion=DuracionPlan(dias=15),
+        necesidad=necesidad,
+        recomendacion=RecomendacionNutricional(texto="Dieta hipocalórica"),
+    )
+
+    # Assert
+    assert plan.paciente_id == paciente_id
+    assert plan.fecha_inicio == fecha_inicio
+    assert plan.fecha_fin == date(2026, 1, 15)
+    assert plan.estado is EstadoPlan.ACTIVO
+    assert plan.duracion.dias == 15
+    assert plan.necesidad is necesidad
+    assert plan.recomendacion.texto == "Dieta hipocalórica"
+    assert plan.es_activo is True
+    assert plan.total_dias_agregados == 0
