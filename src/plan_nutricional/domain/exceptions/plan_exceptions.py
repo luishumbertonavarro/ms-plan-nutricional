@@ -73,3 +73,10 @@ class RecetaNoEncontradaError(PlanNutricionalDomainError):
 class PlanNoEncontradoError(PlanNutricionalDomainError):
     def __init__(self, id: UUID):
         super().__init__(f"No se encontró un plan nutricional con id '{id}'.")
+
+
+class PacienteNoEncontradoError(PlanNutricionalDomainError):
+    """El BC de Pacientes no reconoce al paciente (respuesta 404 de ms-pacientes)."""
+
+    def __init__(self, paciente_id: UUID):
+        super().__init__(f"No se encontró un paciente con id '{paciente_id}' en ms-pacientes.")

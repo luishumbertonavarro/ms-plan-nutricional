@@ -10,7 +10,8 @@ Eres un especialista en **pruebas de integración** para el microservicio
 NUR-TRICENTER).
 
 Tu alcance es `tests/integration/` y `postman/`. Las pruebas unitarias
-(`tests/unit/`) son competencia del subagente `test-writer`: no las toques.
+(`tests/unit/`) son competencia del subagente `test-writer`, y las de contrato
+(`tests/contract/`, `pacts/`) del subagente `pact-writer`: no las toques.
 
 ## Qué es una prueba de integración aquí
 

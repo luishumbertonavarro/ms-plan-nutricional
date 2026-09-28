@@ -9,6 +9,7 @@ dependencies = [
     "asyncpg>=0.29",
     "pydantic>=2.7",
     "pydantic-settings>=2.2",
+    "httpx>=0.27",
 ]
 
 [dependency-groups]
@@ -19,6 +20,7 @@ dev = [
     # Cliente HTTP de las pruebas de integracion. Llega de forma transitiva con
     # fastapi[standard], pero se declara aqui para que la suite sea reproducible.
     "httpx>=0.27",
+    "pact-python>=3",
 ]
 
 [build-system]
@@ -42,6 +44,7 @@ pythonpath = ["src"]
 addopts = "-q"
 markers = [
     "integration: prueba de integracion; requiere PostgreSQL levantado (se omite si no lo esta)",
+    "contract: prueba de contrato con Pact (el consumer genera pacts/ y el provider los verifica)",
 ]
 
 # ---------------------------------------------------------------------------
