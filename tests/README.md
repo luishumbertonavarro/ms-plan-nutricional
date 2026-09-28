@@ -3,7 +3,7 @@
 Suite de pruebas del BC3 – Planificación Nutricional. Recoge tres talleres
 aplicados al caso de estudio del proyecto final:
 
-- **Taller de Unit Tests** → `tests/unit/` — 264 tests, sin base de datos.
+- **Taller de Unit Tests** → `tests/unit/` — 265 tests, sin base de datos.
 - **Taller de Integration Tests** → `tests/integration/` — 21 tests contra la API
   y PostgreSQL reales, más 13 que validan el propio entorno
   (ver [sección 10](#10-pruebas-de-integración)).
@@ -11,7 +11,7 @@ aplicados al caso de estudio del proyecto final:
   consumer, 1 verificación de provider y 12 tests que validan el entorno
   (ver [sección 11](#11-contract-testing-con-pact)).
 
-**298 tests · 84 % de cobertura solo con las unitarias · 89 % con la suite
+**299 tests · 82 % de cobertura solo con las unitarias · 89 % con la suite
 completa** (ver [sección 7](#7-cobertura), que explica por qué son dos números y
 no uno), además de **5 interacciones consumer, 1 verificación de provider y 12
 tests que validan el entorno** (ver [sección 11](#11-contract-testing-con-pact)).
@@ -306,7 +306,7 @@ completa de transiciones de estado (7 combinaciones inválidas) en un solo test.
 
 ## 6. Inventario de la suite
 
-### Capa unitaria — 264 tests
+### Capa unitaria — 265 tests
 
 | Archivo | Tests | Qué cubre |
 |---|---|---|
@@ -320,11 +320,11 @@ completa de transiciones de estado (7 combinaciones inválidas) en un solo test.
 | **Subtotal dominio** | **121** | |
 | `unit/application/` — 22 archivos, uno por caso de uso | 102 | Los 22 casos de uso y los 7 query handlers: camino feliz + **todas** las ramas de error, siempre con `guardar.assert_not_awaited()` |
 | **Subtotal aplicación** | **102** | |
-| `unit/presentation/test_exception_handlers.py` | 23 | Tabla excepción de dominio → `(status, tipo)`, y que ninguna excepción se quede sin manejador |
+| `unit/presentation/test_exception_handlers.py` | 24 | Tabla excepción de dominio → `(status, tipo)`, y que ninguna excepción se quede sin manejador |
 | `unit/presentation/test_mappers.py` | 8 | Las 9 funciones dominio → Pydantic: aplanado de VO y jerarquía anidada |
 | `unit/presentation/test_composicion_de_la_app.py` | 5 | Routers montados, contrato OpenAPI, inyección por puerto, engine ↔ settings |
 | `unit/infrastructure/test_paciente_gateway_mock.py` | 5 | Gateway de pacientes: determinismo y cumplimiento del puerto |
-| **Subtotal presentación + infraestructura** | **41** | |
+| **Subtotal presentación + infraestructura** | **42** | |
 
 Archivos del bloque de aplicación: `test_crear_plan`, `test_agregar_dia`,
 `test_eliminar_dia`, `test_agregar_tiempo_comida`, `test_eliminar_tiempo_comida`,
@@ -345,7 +345,7 @@ Archivos del bloque de aplicación: `test_crear_plan`, `test_agregar_dia`,
 | `integration/test_convenciones_del_entorno.py` | 13 | Guardián: mocks, borrados, aislamiento, naming, Postman |
 | `integration/test_planes_api_flujo_correcto.py` | 8 | Ciclo de vida completo del plan, consultas y aislamiento |
 
-**Total: 298 tests.**
+**Total: 299 tests.**
 
 ---
 
@@ -361,7 +361,7 @@ uv run pytest tests/unit --cov --cov-report=term-missing `
     --cov-report=html:htmlcov-unit --cov-report=xml:coverage-unit.xml
 ```
 
-No necesita PostgreSQL. Resultado: **84 %** (1714 statements + 178 ramas; 236
+No necesita PostgreSQL. Resultado: **82 %** (1525 statements + 180 ramas; 245
 statements sin cubrir).
 
 | Módulo | Cobertura |
@@ -377,10 +377,11 @@ statements sin cubrir).
 | `presentation/api/routers/plantillas.py` | 53 % |
 | `presentation/api/routers/catalogo_recetas.py` | 52 % |
 | `infrastructure/persistence/database.py` | 46 % |
+| `infrastructure/gateways/paciente_gateway_http.py` | 39 % |
 | `infrastructure/persistence/receta_catalogo_repository_impl.py` | 35 % |
 | `infrastructure/persistence/plan_repository_impl.py` | 22 % |
 | `infrastructure/persistence/plantilla_plan_repository_impl.py` | 22 % |
-| **Total** | **84 %** |
+| **Total** | **82 %** |
 
 El reporte HTML versionado está en `htmlcov-unit/index.html` y el XML en
 `coverage-unit.xml`. Son la evidencia que acompaña a la presentación.
@@ -413,8 +414,8 @@ puerto), así que el número está respaldado por aserciones y no es un import
 suelto. Pero **el comportamiento** de los repositorios y de los endpoints solo lo
 prueban las de integración.
 
-Lo que la capa unitaria no puede cubrir por definición — 236 statements, el
-12,5 % del total:
+Lo que la capa unitaria no puede cubrir por definición — 245 statements, el
+16 % del total:
 
 | Qué queda fuera | Statements | Por qué |
 |---|---|---|
@@ -424,8 +425,9 @@ Lo que la capa unitaria no puede cubrir por definición — 236 statements, el
 | Cuerpos de los endpoints de los 3 routers | 84 | requieren una petición HTTP |
 | `database.get_db_session` | 7 | abre sesión, `commit` / `rollback` |
 | `main.lifespan` | 3 | solo se ejecuta con el servidor arrancado |
+| `paciente_gateway_http.obtener_datos` | 9 | petición HTTP real a ms-pacientes; la cubre el consumer de Pact (`tests/contract/`) |
 
-Por eso el techo de la capa unitaria es exactamente el 84 % que se alcanza: no
+Por eso el techo de la capa unitaria es exactamente el 82 % que se alcanza: no
 falta trabajo, falta base de datos. Subir de ahí exigiría mockear `AsyncSession`
 o levantar un cliente HTTP en `tests/unit/`, que es justo lo que las
 convenciones del proyecto prohíben.

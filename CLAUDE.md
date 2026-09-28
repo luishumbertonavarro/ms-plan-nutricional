@@ -26,7 +26,7 @@ uv run pytest -k "duplicado" -v                      # filtrar por nombre
 Cobertura — hay **dos** mediciones y no son intercambiables:
 
 ```bash
-# OFICIAL (requisito del taller, >= 80 %): capa unitaria, sin BD. Da ~84 %.
+# OFICIAL (requisito del taller, >= 80 %): capa unitaria, sin BD. Da ~82 %.
 uv run pytest tests/unit --cov --cov-report=term-missing \
     --cov-report=html:htmlcov-unit --cov-report=xml:coverage-unit.xml
 
@@ -72,7 +72,7 @@ await self._repo.guardar(plan)
 
 **Unidad de trabajo por request**: `get_db_session` hace `commit` al salir y `rollback` si hay excepción.
 
-**Errores → HTTP**: `register_exception_handlers(app)` registra 20 manejadores que devuelven `{"detail": ..., "tipo": "<CODIGO>"}`. 404 para `*NoEncontrado*`, 409 para `*Duplicado*` / `PlanNoModificable` / `TransicionEstadoInvalida` / `RecetaCatalogoInactiva`, 422 para `*FueraDeDuracion*` y `ValueError` genérico. Si añades una excepción de dominio, añade su manejador: hay un test que lo exige.
+**Errores → HTTP**: `register_exception_handlers(app)` registra 21 manejadores que devuelven `{"detail": ..., "tipo": "<CODIGO>"}`. 404 para `*NoEncontrado*` (incluido `PacienteNoEncontrado`), 409 para `*Duplicado*` / `PlanNoModificable` / `TransicionEstadoInvalida` / `RecetaCatalogoInactiva`, 422 para `*FueraDeDuracion*` y `ValueError` genérico. Si añades una excepción de dominio, añade su manejador: hay un test que lo exige.
 
 ## Invariantes de negocio que conviene saber de memoria
 

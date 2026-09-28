@@ -397,12 +397,12 @@ uv run pytest --cov --cov-report=term-missing --cov-report=html:htmlcov
 |---|---|
 | Capa de Dominio | 121 tests — Value Objects, invariantes de los agregados, ciclo de vida del plan |
 | Capa de Aplicación | 102 tests — los 22 casos de uso y los 7 query handlers, con **mocks** de los repositorios (`AsyncMock(spec=...)`) |
-| Presentación (sin I/O) | 36 tests — mappers dominio→Pydantic, tabla excepción→HTTP y composición de la app |
+| Presentación (sin I/O) | 37 tests — mappers dominio→Pydantic, tabla excepción→HTTP y composición de la app |
 | Infraestructura (sin I/O) | 5 tests — gateway de pacientes, determinista y sin red |
 | Integración (API + BD) | 21 tests — `httpx.AsyncClient` contra la app FastAPI real y PostgreSQL, **sin mocks** |
 | Entorno de pruebas | 13 tests que validan las reglas del propio entorno de integración (ver `tests/README.md` §9) |
 | Contratos (Pact) | 5 interacciones consumer en 2 relaciones · 1 verificación de provider · 12 tests del guardián |
-| **Cobertura de la capa unitaria** | **84 %** de todo el microservicio, sin base de datos — evidencia en `htmlcov-unit/` y `coverage-unit.xml` |
+| **Cobertura de la capa unitaria** | **82 %** de todo el microservicio, sin base de datos — evidencia en `htmlcov-unit/` y `coverage-unit.xml` |
 | Cobertura de la suite completa | 89 %, con PostgreSQL levantado |
 
 `pyproject.toml` fija `fail_under = 80`: la suite falla si la cobertura cae por
@@ -483,7 +483,7 @@ pruebas de integración y los hallazgos.
 | Capa de Dominio (AR, Entidades, VOs, Excepciones) | Completo — incluye `PlanNutricional`, `RecetaCatalogo` y `PlantillaPlan` |
 | Interfaces de Repositorio y Gateway | Completo |
 | Capa de Aplicación (casos de uso, queries) | Completo |
-| Pruebas unitarias | 264 tests (dominio, casos de uso, mappers, manejadores de excepción, composición y gateways) · `pytest` + `unittest.mock` · **84 % de cobertura**, umbral `fail_under = 80` |
+| Pruebas unitarias | 265 tests (dominio, casos de uso, mappers, manejadores de excepción, composición y gateways) · `pytest` + `unittest.mock` · **82 % de cobertura**, umbral `fail_under = 80` |
 | Pruebas de integración | 21 tests sobre `/planes` (API + PostgreSQL reales, sin dejar datos) · `httpx` + colección Postman · cobertura de la suite completa 89 % |
 | Pruebas de contrato | Pact v3: `app-paciente` → este servicio (verificado) y este servicio → `ms-pacientes` (pact generado) |
 | Entorno de pruebas para IA | 3 subagentes (`test-writer`, `integration-test-writer`, `pact-writer`) + 3 skills + 2 guardianes automáticos (13 + 12 tests) |

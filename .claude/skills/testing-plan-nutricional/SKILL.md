@@ -195,13 +195,13 @@ subcarpeta (`tests/unit/domain --cov`) fallará aunque sus tests pasen: no es un
 error, es que el denominador sigue siendo el paquete entero. La medición oficial
 es siempre `tests/unit` completo.
 
-**Dos números, dos significados.** `tests/unit` da ~84 % y la suite completa
+**Dos números, dos significados.** `tests/unit` da ~82 % y la suite completa
 ~89 %. La diferencia no es ruido: parte de la cobertura que aporta la suite
 unitaria sobre `infrastructure/` y `presentation/` es **de cableado** (líneas de
 módulo: declaraciones de ruta, columnas del ORM, campos Pydantic, que se
 ejecutan al importar). Los *cuerpos* de los repositorios y de los endpoints solo
 los recorren las pruebas de integración. Al reportar cobertura, no presentes el
-84 % como si los repositorios estuvieran probados.
+82 % como si los repositorios estuvieran probados.
 
 ## 7. Errores frecuentes
 

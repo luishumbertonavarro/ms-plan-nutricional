@@ -5,6 +5,7 @@ from plan_nutricional.domain.exceptions import (
     DiaDuplicadoError,
     DiaFueraDeDuracionError,
     DiaNoEncontradoError,
+    PacienteNoEncontradoError,
     PlanNoEncontradoError,
     PlanNoModificableError,
     PlantillaDiaDuplicadoError,
@@ -30,6 +31,13 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=404,
             content={"detail": str(exc), "tipo": "PLAN_NO_ENCONTRADO"},
+        )
+
+    @app.exception_handler(PacienteNoEncontradoError)
+    async def paciente_no_encontrado_handler(request: Request, exc: PacienteNoEncontradoError):
+        return JSONResponse(
+            status_code=404,
+            content={"detail": str(exc), "tipo": "PACIENTE_NO_ENCONTRADO"},
         )
 
     @app.exception_handler(DiaNoEncontradoError)

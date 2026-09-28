@@ -1,6 +1,6 @@
 """Pruebas de la traducción de errores de dominio a respuestas HTTP.
 
-`register_exception_handlers(app)` registra veinte manejadores que convierten
+`register_exception_handlers(app)` registra veintiún manejadores que convierten
 cada excepción del dominio en un `JSONResponse` con `status_code` y un código
 `tipo` estable que el cliente puede interpretar sin parsear el mensaje.
 
@@ -24,6 +24,7 @@ from plan_nutricional.domain.exceptions import (
     DiaDuplicadoError,
     DiaFueraDeDuracionError,
     DiaNoEncontradoError,
+    PacienteNoEncontradoError,
     PlanNoEncontradoError,
     PlanNoModificableError,
     PlanNutricionalDomainError,
@@ -52,6 +53,7 @@ from plan_nutricional.presentation.api.exception_handlers import (
 CASOS = [
     # 404 — el recurso no existe
     (PlanNoEncontradoError(uuid4()), 404, "PLAN_NO_ENCONTRADO"),
+    (PacienteNoEncontradoError(uuid4()), 404, "PACIENTE_NO_ENCONTRADO"),
     (DiaNoEncontradoError(3), 404, "DIA_NO_ENCONTRADO"),
     (
         TiempoComidaNoEncontradoError(TipoTiempoComida.DESAYUNO),
