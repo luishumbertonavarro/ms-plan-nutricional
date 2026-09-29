@@ -16,3 +16,6 @@ build/
 # >= 80 % de la capa unitaria que se entrega con la presentación.
 htmlcov/
 coverage.xml
+
+# Material del video de presentación: solo local, no se versiona.
+video/
