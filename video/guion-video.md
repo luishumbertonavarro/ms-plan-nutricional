@@ -1,20 +1,15 @@
 # Guion del video — Capa de testing de `ms-plan-nutricional`
 
-Duración objetivo: **6 a 8 minutos**. Presentación individual, clara y concisa.
+Duración objetivo: **3 a 4 minutos**. Lee solo lo que está en los bloques de cita (>).
 
 ---
 
-## 0. Antes de grabar (checklist, no sale en el video)
+## 0. Antes de grabar (no sale en el video)
 
-- [x] Todos los tests en verde (265 unitarios · 317 en la suite completa).
-- [x] Reporte de cobertura regenerado: **81.88 %** en unitarias, **89 %** con la suite completa.
-- [ ] Docker Desktop abierto.
-- [ ] Terminal con fuente grande (zoom ≥ 130 %), en la raíz del repo.
-- [ ] VS Code abierto con el árbol de carpetas visible.
-- [ ] Ensayo previo de todos los comandos (la primera ejecución de `uv` puede tardar).
-- [ ] Cerrar notificaciones y pestañas con datos personales.
-
-Preparación en terminal:
+- [ ] Docker Desktop abierto y la BD levantada (si no, las 22 pruebas de integración salen como *skipped*).
+- [ ] Terminal en la raíz del repo, fuente grande.
+- [ ] VS Code con el árbol de `tests/` visible.
+- [ ] Ensayar los comandos una vez.
 
 ```powershell
 uv sync
@@ -23,122 +18,54 @@ docker compose -f ms-plan-nutricional-docker-compose.yml up -d
 
 ---
 
-## 1. Introducción (≈ 30 s)
+## 1. Intro (≈ 20 s) — pantalla: árbol de `tests/`
 
-**Pantalla:** README del repo.
-
-**Qué decir:**
 > "Soy Luis Humberto Navarro. Presento la capa de testing del microservicio
-> `ms-plan-nutricional`, el BC3 de Planificación Nutricional de NUR-TRICENTER.
-> Es una API en FastAPI con SQLAlchemy async y PostgreSQL, organizada con Clean
-> Architecture y DDD. Voy a mostrar las pruebas unitarias con su reporte de cobertura,
-> las pruebas de integración agrupadas por flujo y las skills que usé para generarlas."
+> ms-plan-nutricional, hecho en FastAPI con PostgreSQL. Tiene tres carpetas:
+> unit, que prueba la lógica sin base de datos; integration, que llama a los endpoints
+> del propio microservicio contra un PostgreSQL en Docker; y contract, con Pact."
 
 ---
 
-## 2. Estructura de las pruebas (≈ 45 s)
+## 2. Unitarias + cobertura (≈ 1 min)
 
-**Pantalla:** árbol de `tests/` en VS Code.
+**Pantalla:** abre `tests/unit/application/test_agregar_dia.py` unos segundos.
 
-```
-tests/
-├── conftest.py          ← fixtures compartidas (construir_plan, repos mock…)
-├── unit/                ← sin base de datos
-│   ├── domain/          ← agregados, entidades, value objects
-│   ├── application/     ← un archivo por caso de uso
-│   ├── presentation/    ← mappers, excepción→HTTP, composición de la app
-│   └── infrastructure/  ← gateway mock de pacientes
-├── integration/         ← API real + PostgreSQL real
-│   ├── test_planes_api_flujo_correcto.py
-│   ├── test_planes_api_flujo_incorrecto.py
-│   └── test_convenciones_del_entorno.py   ← guardián
-└── contract/            ← Pact (consumer / provider)
-```
-
-**Qué decir:**
-> "Separo las pruebas por I/O: las unitarias no tocan la base, las de integración
-> usan la API y PostgreSQL reales, y además hay contract testing con Pact."
-
----
-
-## 3. Pruebas unitarias (≈ 1 min 15 s)
-
-**Pantalla:** abre `tests/unit/application/test_agregar_dia.py` (o `test_crear_plan.py`).
-
-**Qué señalar en el código:**
-- Patrón **AAA** con comentarios `# Arrange / # Act / # Assert`.
-- Nombres en español: `test_<accion>_<condicion>_<resultado>`.
-- Repositorios doblados con `AsyncMock(spec=PuertoABC)`, porque sin `spec` un método mal escrito pasaría en verde.
-- `assert_awaited_once_with` en el camino feliz y `guardar.assert_not_awaited()` en las ramas de error.
-
-Muestra también `tests/unit/domain/test_plan_nutricional.py`, donde se prueban invariantes
-(duración 15/30 días, transiciones de estado, plan no modificable).
+> "Las unitarias siguen el patrón Arrange-Act-Assert y reemplazan la base de datos
+> por repositorios falsos hechos con AsyncMock."
 
 **Ejecuta:**
 
 ```powershell
-uv run pytest tests/unit -q
+uv run pytest tests/unit --cov --cov-report=term-missing --cov-report=html:htmlcov-unit --cov-report=xml:coverage-unit.xml
 ```
 
-**Qué decir:**
-> "Son 265 pruebas y corren en segundos sin base de datos."
+**Pantalla:** la línea final `Required test coverage of 80.0% reached. Total coverage: 83.88%`.
 
----
-
-## 4. Reporte de cobertura (≈ 1 min)
-
-**Ejecuta:**
-
-```powershell
-uv run pytest tests/unit --cov --cov-report=term-missing `
-    --cov-report=html:htmlcov-unit --cov-report=xml:coverage-unit.xml
-```
-
-**Pantalla:** al final de la salida, el `TOTAL` y la línea
-`Required test coverage of 80.0% reached`.
-
-Luego abre el HTML:
+> "Son 265 pruebas y la cobertura es de casi 84 por ciento, por encima del 80 exigido.
+> Si baja del 80, la ejecución falla."
 
 ```powershell
 start htmlcov-unit/index.html
 ```
 
-**Qué señalar:**
-- El porcentaje total (≥ 80 %).
-- Un archivo con cobertura alta, por ejemplo `plan_nutricional.py`.
-- En `pyproject.toml`, `fail_under = 80`: si la cobertura baja del umbral, la suite falla.
-
-**Qué decir:**
-> "La cobertura oficial se mide solo con la capa unitaria y sin base de datos, y
-> da un 82 %, por encima del 80 % exigido. El reporte está versionado en `htmlcov-unit/` y en `coverage-unit.xml`."
+> "Este es el reporte HTML, que está versionado en el repositorio."
 
 ---
 
-## 5. Pruebas de integración: los flujos (≈ 2 min)
+## 3. Integración: dos flujos (≈ 1 min)
 
-**Pantalla:** `tests/integration/conftest.py`, solo 15 segundos.
+**Pantalla:** `tests/integration/test_planes_api_flujo_correcto.py`.
 
-**Qué decir:**
-> "Las pruebas usan un cliente httpx sobre la app FastAPI real y una base PostgreSQL real.
-> No hay ningún mock. Cada test corre dentro de una transacción que se revierte al final,
-> así que la base queda intacta."
+> "Las pruebas de integración se agrupan en dos flujos, un archivo por flujo.
+> El flujo correcto recorre el ciclo de vida de un plan: crearlo, agregar día,
+> tiempo de comida y receta, y cambiar su estado. Después lo vuelve a leer con un GET
+> para comprobar que todo se guardó en la base de datos."
 
-### Flujo 1 — Ciclo de vida completo de un plan (camino feliz)
+**Pantalla:** `tests/integration/test_planes_api_flujo_incorrecto.py`.
 
-**Pantalla:** `test_planes_api_flujo_correcto.py` → `test_ciclo_de_vida_completo_de_un_plan_persiste_en_la_base`.
-
-Explica los pasos: crear plan → agregar día → agregar tiempo de comida → agregar receta
-→ cambiar estado → verificar que todo quedó persistido. Menciona también la consulta de
-planes por paciente y el listado de planes activos.
-
-### Flujo 2 — Reglas de negocio y errores (caminos de error)
-
-**Pantalla:** `test_planes_api_flujo_incorrecto.py`.
-
-Señala cómo cada error de dominio se traduce a HTTP:
-- **404**: plan o día inexistente.
-- **409**: día, tiempo de comida o receta duplicados; plan finalizado que no admite cambios.
-- **422**: día fuera de la duración; duración distinta de 15 o 30 días.
+> "El flujo incorrecto prueba las reglas de negocio: 404 si no existe,
+> 409 por duplicados o plan finalizado, y 422 por datos inválidos."
 
 **Ejecuta:**
 
@@ -146,90 +73,41 @@ Señala cómo cada error de dominio se traduce a HTTP:
 uv run pytest tests/integration -v
 ```
 
-**Qué decir:**
-> "Las pruebas se agrupan por flujo, un archivo por flujo. Además, el guardián
-> `test_convenciones_del_entorno.py` verifica por análisis estático que ninguna prueba use
-> mocks ni borre datos."
+> "No usan mocks, y cada prueba corre en una transacción que se revierte, así la base queda limpia."
 
-### (Opcional, 30 s) Postman
+---
+
+## 4. Pact (≈ 20 s, opcional)
 
 ```powershell
-uv run fastapi dev main.py
+uv run pytest tests/contract -v
 ```
 
-Importa `postman/ms-plan-nutricional.postman_collection.json` y su environment, y ejecuta
-la colección con el Runner.
+> "Además hay contract testing con Pact: el consumidor genera el contrato y el proveedor lo verifica."
 
 ---
 
-## 6. Contract testing con Pact (≈ 45 s, opcional pero suma)
+## 5. Skills (≈ 30 s) — pantalla: carpeta `.claude/` y `CLAUDE.md`
 
-**Ejecuta:**
-
-```powershell
-uv run pytest tests/contract/consumer -v    # genera los pacts en pacts/
-uv run pytest tests/contract/provider -v    # verifica la API real contra el pact
-```
-
-**Pantalla:** `pacts/app-paciente-ms-plan-nutricional.json`.
-
-**Qué decir:**
-> "Como tercera capa, el consumidor define el contrato y el proveedor lo verifica contra
-> la API real con PostgreSQL."
+> "Los tests los generé con Claude Code. Las skills y los agentes que usé están
+> en la carpeta .claude, y las reglas del proyecto en CLAUDE.md."
 
 ---
 
-## 7. Skills y reglas usadas para generar los tests (≈ 1 min)
+## 6. Cierre (≈ 10 s)
 
-**Pantalla:** la carpeta `.claude/`.
-
-```
-CLAUDE.md                                        ← reglas del proyecto
-.claude/skills/testing-plan-nutricional/         ← convenciones de unit tests
-.claude/skills/integration-testing-plan-nutricional/
-.claude/skills/contract-testing-plan-nutricional/
-.claude/agents/test-writer.md                    ← subagente de unitarias
-.claude/agents/integration-test-writer.md        ← subagente de integración
-.claude/agents/pact-writer.md                    ← subagente de contratos
-```
-
-Abre `SKILL.md` de `testing-plan-nutricional` y muestra una sección (AAA, uso de `AsyncMock(spec=...)`).
-
-**Qué decir:**
-> "Generé los tests con Claude Code. Las skills fijan las convenciones y el `CLAUDE.md`
-> las reglas del proyecto, por ejemplo no modificar `src/` para que un test pase.
-> Cada subagente tiene su propio alcance, sin solaparse con los demás.
-> Todo está en el repositorio, como pide la tarea."
+> "En resumen: 265 pruebas unitarias con 84 por ciento de cobertura, dos flujos de integración
+> y contratos con Pact. Todo se ejecuta con uv run pytest. Gracias."
 
 ---
 
-## 8. Cierre (≈ 20 s)
-
-**Pantalla:** README, sección "Pruebas y Cobertura".
-
-**Qué decir:**
-> "En resumen: 265 pruebas unitarias con un 82 % de cobertura, pruebas de
-> integración agrupadas en dos flujos sobre la API y la base reales, contratos con Pact
-> y las skills que usé para generarlo todo. Todo se ejecuta con `uv run pytest`. Gracias."
-
----
-
-## Resumen de comandos (en orden)
+## Comandos en orden
 
 ```powershell
 uv sync
 docker compose -f ms-plan-nutricional-docker-compose.yml up -d
-uv run pytest tests/unit -q
 uv run pytest tests/unit --cov --cov-report=term-missing --cov-report=html:htmlcov-unit --cov-report=xml:coverage-unit.xml
 start htmlcov-unit/index.html
 uv run pytest tests/integration -v
-uv run pytest tests/contract/consumer -v
-uv run pytest tests/contract/provider -v
+uv run pytest tests/contract -v
 ```
-
-## Consejos de grabación
-
-- Herramienta: OBS Studio o la grabadora de Windows (`Win + Alt + R`) o Clipchamp.
-- Resolución de 1080p y micrófono cerca. Graba cada sección por separado y únelas al final.
-- Si un comando tarda, corta la espera en la edición.
-- No leas el guion palabra por palabra; úsalo como referencia.
