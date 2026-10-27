@@ -1,12 +1,18 @@
 
-# Base de datos exclusiva de ms-plan-nutricional.
-# La API se corre en el host con: uv run fastapi dev main.py
+# ms-plan-nutricional: base de datos + API.
 #
-# Levantar BD:
-#   docker compose -f ms-plan-nutricional-docker-compose.yml up -d
+# Requisito: la infraestructura del grupo (Consul, RabbitMQ, api-gateway) levantada antes,
+# porque crea la red nurtricenter_net:
+#   cd ../api-gateway && docker compose up -d --build
 #
-# Detener BD:
-#   docker compose -f ms-plan-nutricional-docker-compose.yml down
+# Levantar:
+#   docker compose -f ms-plan-nutricional-docker-compose.yml up -d --build
+#
+# Solo la BD (para correr la API en el host con `uv run fastapi dev main.py`):
+#   docker compose -f ms-plan-nutricional-docker-compose.yml up -d plan_nutricional_db
+#
+# Si la BD ya existía antes de la mensajería, aplicar una vez:
+#   docker exec -i plan_nutricional_db psql -U postgres -d db_plan_nutricional < migraciones/001_mensajeria.sql
 
 services:
   plan_nutricional_db:
@@ -27,8 +33,41 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks: [nurtricenter_net]
+
+  plan_nutricional_api:
+    build: .
+    image: betonavarro/ms-plan-nutricional:2.0.0
+    container_name: plan_nutricional_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@plan_nutricional_db:5432/db_plan_nutricional
+      APP_ENV: docker
+      SERVICIO_NOMBRE: ms-plan-nutricional
+      SERVICIO_PUERTO: 8000
+      CONSUL_URL: http://consul:8500
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      AUTH_HABILITADA: "true"
+      JWT_SECRET: ${JWT_SECRET:-nurtricenter-secreto-compartido-2026}
+      JWT_ISSUER: ${JWT_ISSUER:-nurtricenter-gateway}
+    ports:
+      - "8010:8000"   # acceso directo solo para depurar; el camino normal es el api-gateway (:8080)
+    depends_on:
+      plan_nutricional_db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [nurtricenter_net]
 
 volumes:
   plan_nutricional_postgres_data:
     name: plan_nutricional_postgres_data
     driver: local
+
+networks:
+  nurtricenter_net:
+    external: true
+    name: nurtricenter_net

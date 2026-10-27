@@ -1,0 +1,15 @@
+.venv
+.git
+.pytest_cache
+__pycache__
+**/__pycache__
+htmlcov
+htmlcov-unit
+playwright
+video
+pacts
+postman
+tests
+.coverage
+coverage-unit.xml
+.env

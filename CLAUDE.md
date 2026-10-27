@@ -39,7 +39,8 @@ No hay linter ni formateador configurados.
 ## Trampas del entorno
 
 - **La BD escucha en el puerto 5434**, no en el 5432 — se eligió para no chocar con otros microservicios del diplomado. El default de `Settings.database_url` ya lo refleja.
-- **La API no está dockerizada**: el compose levanta solo PostgreSQL; la API corre en el host.
+- **La API está dockerizada** (`plan_nutricional_api`, puerto 8010, `AUTH_HABILITADA=true`) y necesita la red `nurtricenter_net`, que crea el compose de `../api-gateway` (Consul + RabbitMQ + gateway). En el host (`uv run fastapi dev main.py`) la auth, Consul y RabbitMQ quedan **desactivados** por defecto: los activan `AUTH_HABILITADA`, `CONSUL_URL` y `RABBITMQ_URL`.
+- **Mensajería**: cada `guardar()` del repo de planes inserta en `outbox` los eventos del agregado (misma sesión). Una BD creada antes necesita `migraciones/001_mensajeria.sql` una vez.
 - **Cobertura en 0 %** → falta la instalación editable: `uv sync`.
 - **`fail_under = 80` aplica a cualquier invocación con `--cov`**, así que medir una subcarpeta suelta (`tests/unit/domain --cov`) falla aunque sus tests pasen: el denominador sigue siendo el paquete entero. La medición oficial es `tests/unit` completo.
 - **Al regenerar `htmlcov-unit/`** hay que borrar el `htmlcov-unit/.gitignore` que coverage.py recrea con `*`; si no, la evidencia queda invisible para git.

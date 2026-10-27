@@ -18,7 +18,9 @@ from plan_nutricional.domain.model import (
     TipoTiempoComida,
 )
 from plan_nutricional.domain.repositories import PlanNutricionalRepository
+from plan_nutricional.infrastructure.messaging.eventos_integracion import a_mensaje
 from plan_nutricional.infrastructure.persistence.orm_models import (
+    OutboxORM,
     PlanDiaORM,
     PlanNutricionalORM,
     RecetaORM,
@@ -117,6 +119,21 @@ class PlanNutricionalRepositoryImpl(PlanNutricionalRepository):
         self._session = session
 
     async def guardar(self, plan: PlanNutricional) -> None:
+        await self._persistir(plan)
+        # Transactional Outbox: los eventos se insertan en la MISMA sesión que el agregado,
+        # así se confirman (o se descartan) junto con él. El relay los publica después.
+        for evento in plan.extraer_eventos():
+            mensaje = a_mensaje(evento, plan)
+            self._session.add(
+                OutboxORM(
+                    tipo=mensaje.tipo,
+                    routing_key=mensaje.routing_key,
+                    payload=mensaje.payload,
+                    ocurrido_en=mensaje.ocurrido_en,
+                )
+            )
+
+    async def _persistir(self, plan: PlanNutricional) -> None:
         existing = await self._session.get(
             PlanNutricionalORM,
             plan.id,
