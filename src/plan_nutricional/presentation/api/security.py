@@ -31,7 +31,8 @@ def validar_token(token: str) -> dict:
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
             issuer=settings.jwt_issuer,
-            options={"require": ["sub", "exp", "iss"]},
+            audience=settings.jwt_audience,
+            options={"require": ["sub", "exp", "iss", "aud"]},
         )
     except jwt.ExpiredSignatureError:
         raise _no_autorizado("El token expiró")

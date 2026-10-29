@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     jwt_secret: str = "nurtricenter-secreto-compartido-2026"
     jwt_algorithm: str = "HS256"
     jwt_issuer: str = "nurtricenter-gateway"
+    jwt_audience: str = "nurtricenter-api"
 
 
 settings = Settings()

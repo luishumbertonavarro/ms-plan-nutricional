@@ -3,7 +3,7 @@
 #
 # Requisito: la infraestructura del grupo (Consul, RabbitMQ, api-gateway) levantada antes,
 # porque crea la red nurtricenter_net:
-#   cd ../api-gateway && docker compose up -d --build
+#   cd ../../ms-api-gateway && docker compose up -d --build   (o el sistema completo: docker-compose.sistema.yml)
 #
 # Levantar:
 #   docker compose -f ms-plan-nutricional-docker-compose.yml up -d --build
@@ -50,8 +50,9 @@ services:
       AUTH_HABILITADA: "true"
       JWT_SECRET: ${JWT_SECRET:-nurtricenter-secreto-compartido-2026}
       JWT_ISSUER: ${JWT_ISSUER:-nurtricenter-gateway}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-nurtricenter-api}
     ports:
-      - "8010:8000"   # acceso directo solo para depurar; el camino normal es el api-gateway (:8080)
+      - "8010:8000"   # acceso directo solo para depurar; el camino normal es el api-gateway (localhost:5000/plan-nutricional)
     depends_on:
       plan_nutricional_db:
         condition: service_healthy

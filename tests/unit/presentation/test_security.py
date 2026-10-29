@@ -32,6 +32,7 @@ def _credenciales(secreto: str | None = None, **claims) -> HTTPAuthorizationCred
         "sub": "u",
         "rol": "nutricionista",
         "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
         "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
     } | claims
     token = jwt.encode(payload, secreto or settings.jwt_secret, algorithm="HS256")
@@ -83,6 +84,16 @@ def test_token_de_otro_emisor_devuelve_401():
     # Act / Assert
     with pytest.raises(HTTPException) as error:
         dependencia(_request("GET"), _credenciales(iss="otro-emisor"))
+    assert error.value.status_code == 401
+
+
+def test_token_para_otra_audiencia_devuelve_401():
+    # Arrange
+    credenciales = _credenciales(aud="otra-api")
+
+    # Act / Assert
+    with pytest.raises(HTTPException) as error:
+        dependencia(_request("GET"), credenciales)
     assert error.value.status_code == 401
 
 
