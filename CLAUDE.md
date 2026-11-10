@@ -34,7 +34,18 @@ uv run pytest tests/unit --cov --cov-report=term-missing \
 uv run pytest --cov --cov-report=term-missing --cov-report=html:htmlcov
 ```
 
-No hay linter ni formateador configurados.
+Linter y hook de git:
+
+```bash
+uv run pre-commit install                            # una vez tras clonar: instala el hook pre-commit
+uv run ruff check .                                  # linter (lo mismo que ejecuta el hook)
+uv run pre-commit run --all-files                    # ejecutar el hook a mano sobre todo el repo
+```
+
+Ruff usa un `select` explícito en `pyproject.toml` (`E4`, `E7`, `E9`, `F`, `W191`, `E101`) para que el
+resultado no cambie con la versión de ruff. `W191`/`E101` fuerzan indentación con **espacios** (PEP 8),
+igual que `.editorconfig`. No hay formateador: `ruff format` reescribiría ~79 archivos.
+El hook evalúa lo que está en staging: un cambio de configuración sin `git add` no cuenta.
 
 ## Trampas del entorno
 
