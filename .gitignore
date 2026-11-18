@@ -19,3 +19,6 @@ coverage.xml
 
 # Material del video de presentación: solo local, no se versiona.
 video/
+
+# Tooling de git hooks (Husky + lint-staged)
+node_modules/

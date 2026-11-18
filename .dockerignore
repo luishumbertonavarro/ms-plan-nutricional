@@ -13,3 +13,9 @@ tests
 .coverage
 coverage-unit.xml
 .env
+node_modules
+.husky
+package.json
+package-lock.json
+.github
+sonar-project.properties

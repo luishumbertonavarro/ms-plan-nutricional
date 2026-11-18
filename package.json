@@ -1,0 +1,15 @@
+{
+  "name": "ms-plan-nutricional-tooling",
+  "private": true,
+  "description": "Tooling de git hooks (Husky + lint-staged). El microservicio es Python/uv; este package.json solo instala los hooks.",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.py": "uv run ruff check --fix"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2"
+  }
+}
