@@ -34,18 +34,34 @@ uv run pytest tests/unit --cov --cov-report=term-missing \
 uv run pytest --cov --cov-report=term-missing --cov-report=html:htmlcov
 ```
 
-Linter y hook de git:
+Linter y hook de git (Husky + lint-staged):
 
 ```bash
-uv run pre-commit install                            # una vez tras clonar: instala el hook pre-commit
-uv run ruff check .                                  # linter (lo mismo que ejecuta el hook)
-uv run pre-commit run --all-files                    # ejecutar el hook a mano sobre todo el repo
+npm install                                          # una vez tras clonar: el script `prepare` instala los hooks de Husky
+uv run ruff check .                                  # linter (lo mismo que ejecuta el hook y el CI)
+npx lint-staged                                      # ejecutar a mano el hook sobre lo que está en staging
 ```
+
+Flujo del commit: `git commit` → `.husky/pre-commit` → `npx lint-staged` → `uv run ruff check --fix` sobre los
+`*.py` en staging (config en `package.json`). Lo autocorregible se corrige y se re-agrega; si queda un error
+(p. ej. `F821`), el commit se aborta. El `package.json` de la raíz es **solo tooling**; el de `playwright/` es otro proyecto.
 
 Ruff usa un `select` explícito en `pyproject.toml` (`E4`, `E7`, `E9`, `F`, `W191`, `E101`) para que el
 resultado no cambie con la versión de ruff. `W191`/`E101` fuerzan indentación con **espacios** (PEP 8),
 igual que `.editorconfig`. No hay formateador: `ruff format` reescribiría ~79 archivos.
-El hook evalúa lo que está en staging: un cambio de configuración sin `git add` no cuenta.
+
+## CI y calidad
+
+- **GitHub Actions** (`.github/workflows/ci.yml`, push/PR a `master`): `uv sync --locked` → `ruff check` →
+  `pytest tests/unit --cov --cov-report=xml:coverage.xml` → SonarCloud.
+- **SonarCloud** (`sonar-project.properties`): org `luishumbertonavarro`, key `luishumbertonavarro_ms-plan-nutricional`.
+  Requiere el secret `SONAR_TOKEN` en GitHub y **Automatic Analysis desactivado** en SonarCloud (si no, el scan del CI falla).
+- Para configurar o diagnosticar hooks/CI/Sonar, carga la skill `ci-quality-plan-nutricional`.
+
+Trampas:
+- **Husky fija `core.hooksPath=.husky/_`**: `.pre-commit-config.yaml` (tarea anterior) queda como histórico y ya no se ejecuta. No corras `pre-commit install`: chocaría con Husky.
+- El hook corre en Git Bash: `uv` y `npx` deben estar en el PATH.
+- `coverage.xml` (CI) está en `.gitignore`; la evidencia versionada sigue siendo `coverage-unit.xml`.
 
 ## Trampas del entorno
 

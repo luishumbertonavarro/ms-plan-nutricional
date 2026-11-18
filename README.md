@@ -3,7 +3,10 @@
 **Sistema:** NUR-TRICENTER — Sistema Integral de Gestión Nutricional  
 **Responsable:** Luis Humberto Navarro Ribeiro  
 **Bounded Context:** BC3 – Planificación Nutricional  
-**Repositorio:** _<!-- TODO: reemplazar por la URL del repositorio GitHub -->_ `https://github.com/luishumbertonavarro/ms-plan-nutricional`
+**Repositorio:** https://github.com/luishumbertonavarro/ms-plan-nutricional
+
+[![CI](https://github.com/luishumbertonavarro/ms-plan-nutricional/actions/workflows/ci.yml/badge.svg)](https://github.com/luishumbertonavarro/ms-plan-nutricional/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=luishumbertonavarro_ms-plan-nutricional&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=luishumbertonavarro_ms-plan-nutricional)
 
 Microservicio desarrollado aplicando **Domain Driven Design (DDD)**, **Arquitectura Limpia (Clean Architecture)**
 y **CQRS**, con separación estricta de comandos (escritura) y consultas (lectura). Expone una **API REST**
@@ -473,6 +476,38 @@ extienden el entorno para IA a los contratos, y
 Ver **[tests/README.md](tests/README.md)** para el detalle: qué es un mock y cómo
 se usa aquí, el patrón AAA, el inventario completo de la suite, cómo se montan las
 pruebas de integración y los hallazgos.
+
+---
+
+## Calidad: Git Hooks, CI y SonarCloud
+
+**Pre-commit con Husky + lint-staged.** Antes de cada commit, Husky ejecuta
+`lint-staged`, que pasa **Ruff** (`uv run ruff check --fix`) sobre los `*.py` en
+staging. Lo que Ruff puede corregir solo se corrige. Cualquier otro error
+**aborta el commit**.
+
+```bash
+uv sync        # dependencias Python (incluye ruff)
+npm install    # instala husky + lint-staged y activa el hook (core.hooksPath = .husky/_)
+```
+
+**Integración continua (GitHub Actions).** `.github/workflows/ci.yml` corre en cada
+push y PR a `master`:
+
+1. `uv sync --locked` instala las dependencias.
+2. `uv run ruff check .` corre el linter.
+3. `uv run pytest tests/unit --cov --cov-report=xml:coverage.xml` corre las pruebas unitarias con un umbral de cobertura del 80 %.
+4. El escaneo de **SonarCloud** importa esa cobertura.
+
+**SonarCloud.** Se configura en `sonar-project.properties`. Para que funcione:
+
+1. Importar el repo en sonarcloud.io.
+2. Desactivar *Automatic Analysis*.
+3. Cargar el token como secret `SONAR_TOKEN` en GitHub.
+
+> Este punto se implementó con asistencia de IA (Claude Code). Las guías están
+> versionadas en `CLAUDE.md` (sección *CI y calidad*) y en la skill
+> `.claude/skills/ci-quality-plan-nutricional/SKILL.md`.
 
 ---
 
