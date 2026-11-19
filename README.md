@@ -505,9 +505,23 @@ push y PR a `master`:
 2. Desactivar *Automatic Analysis*.
 3. Cargar el token como secret `SONAR_TOKEN` en GitHub.
 
-> Este punto se implementó con asistencia de IA (Claude Code). Las guías están
-> versionadas en `CLAUDE.md` (sección *CI y calidad*) y en la skill
-> `.claude/skills/ci-quality-plan-nutricional/SKILL.md`.
+---
+
+## Uso de herramientas de IA
+
+Parte del proyecto se desarrolló con asistencia de **Claude Code**. Las instrucciones,
+skills y agentes que se usaron están versionados en el repositorio:
+
+| Tipo | Archivo | Propósito |
+|---|---|---|
+| Instrucciones del proyecto | `CLAUDE.md` | Comandos, arquitectura, invariantes, convenciones de testing y la sección *CI y calidad* |
+| Skill | `.claude/skills/ci-quality-plan-nutricional/SKILL.md` | Husky + lint-staged, GitHub Actions y SonarCloud: configuración y diagnóstico |
+| Skill | `.claude/skills/testing-plan-nutricional/SKILL.md` | Convenciones de las pruebas unitarias |
+| Skill | `.claude/skills/integration-testing-plan-nutricional/SKILL.md` | Convenciones de las pruebas de integración y de la colección de Postman |
+| Skill | `.claude/skills/contract-testing-plan-nutricional/SKILL.md` | Pruebas de contrato con Pact |
+| Agente | `.claude/agents/test-writer.md` | Escribe pruebas unitarias |
+| Agente | `.claude/agents/integration-test-writer.md` | Escribe pruebas de integración |
+| Agente | `.claude/agents/pact-writer.md` | Escribe pruebas de contrato |
 
 ---
 
