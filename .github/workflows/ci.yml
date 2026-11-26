@@ -4,6 +4,9 @@
 #   2. linter (ruff, el mismo que fuerza el hook de Husky)
 #   3. pruebas unitarias + cobertura (umbral 80 % en pyproject.toml)
 #   4. análisis estático en SonarCloud (importa coverage.xml)
+# Y en push a master (entrega continua):
+#   5. docker: compila la imagen y la publica en Docker Hub (:latest y :<sha>)
+#   6. deploy: por SSH copia deploy/ al servidor EC2 y ejecuta deploy/deploy.sh <sha>
 name: CI
 
 on:
@@ -47,3 +50,73 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ── Entrega continua: solo en push a master (o ejecución manual), nunca en PRs ──────────
+
+  docker:
+    name: Imagen Docker (build + push)
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Compilar y publicar la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/ms-plan-nutricional:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/ms-plan-nutricional:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy en EC2 (SSH)
+    needs: docker
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-produccion
+      cancel-in-progress: false
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      APP_DIR: ms-plan-nutricional # relativo al HOME del usuario SSH
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/ms-plan-nutricional
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar la clave SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Copiar los archivos de despliegue al servidor
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" "mkdir -p $APP_DIR/deploy"
+          scp -i ~/.ssh/deploy_key deploy/docker-compose.prod.yml deploy/deploy.sh \
+            "$SSH_USER@$SSH_HOST:$APP_DIR/deploy/"
+          scp -i ~/.ssh/deploy_key bd-ms-plan-nutricional.sql "$SSH_USER@$SSH_HOST:$APP_DIR/"
+
+      - name: Ejecutar el script de despliegue
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
+            "bash $APP_DIR/deploy/deploy.sh '${{ github.sha }}' '$IMAGE'"

@@ -22,3 +22,7 @@ video/
 
 # Tooling de git hooks (Husky + lint-staged)
 node_modules/
+
+# Claves privadas (key pair de AWS EC2): nunca al repo
+*.pem
+*.ppk

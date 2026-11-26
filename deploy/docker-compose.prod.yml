@@ -1,0 +1,66 @@
+# ms-plan-nutricional — despliegue en el servidor (AWS EC2).
+#
+# A diferencia de ms-plan-nutricional-docker-compose.yml (desarrollo, compila con `build: .`),
+# aquí NO se compila: se descarga la imagen que GitHub Actions publicó en Docker Hub.
+# Lo ejecuta deploy/deploy.sh; las variables salen de ~/ms-plan-nutricional/.env (setup-server.sh).
+#
+# Se une a la red nurtricenter_net igual que el resto del sistema NUR-TRICENTER. Sin Consul ni
+# RabbitMQ en el servidor, CONSUL_URL y RABBITMQ_URL quedan vacíos (modo standalone); si la
+# infraestructura del grupo corre en la misma red, basta con darles valor en el .env.
+name: ms-plan-nutricional
+
+services:
+  plan_nutricional_db:
+    image: postgres:15
+    container_name: plan_nutricional_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en el .env}
+      POSTGRES_DB: db_plan_nutricional
+    # Sin `ports`: la BD solo es accesible desde la red de Docker, no desde internet.
+    volumes:
+      - plan_nutricional_postgres_data:/var/lib/postgresql/data
+      - ../bd-ms-plan-nutricional.sql:/docker-entrypoint-initdb.d/bd-ms-plan-nutricional.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d db_plan_nutricional"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [nurtricenter_net]
+
+  plan_nutricional_api:
+    image: ${IMAGE:-betonavarro/ms-plan-nutricional}:${TAG:-latest}
+    container_name: plan_nutricional_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@plan_nutricional_db:5432/db_plan_nutricional
+      APP_ENV: production
+      SERVICIO_NOMBRE: ms-plan-nutricional
+      SERVICIO_PUERTO: 8000
+      CONSUL_URL: ${CONSUL_URL:-}
+      RABBITMQ_URL: ${RABBITMQ_URL:-}
+      AUTH_HABILITADA: ${AUTH_HABILITADA:-true}
+      JWT_SECRET: ${JWT_SECRET:?Falta JWT_SECRET en el .env}
+      JWT_ISSUER: ${JWT_ISSUER:-nurtricenter-gateway}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-nurtricenter-api}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      plan_nutricional_db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [nurtricenter_net]
+
+volumes:
+  plan_nutricional_postgres_data:
+    name: plan_nutricional_postgres_data
+
+networks:
+  nurtricenter_net:
+    external: true
+    name: nurtricenter_net
