@@ -507,6 +507,61 @@ push y PR a `master`:
 
 ---
 
+## Despliegue continuo (CD) en AWS EC2
+
+Cada push a `master` que pasa el CI se publica solo en un servidor Ubuntu en AWS EC2.
+El mismo workflow (`.github/workflows/ci.yml`) encadena tres jobs:
+
+```
+push a master
+  └─ build   ruff + pytest unitarias + cobertura + SonarCloud
+      └─ docker  compila el Dockerfile y publica <usuario>/ms-plan-nutricional:latest y :<sha> en Docker Hub
+          └─ deploy  por SSH: copia deploy/ al servidor y ejecuta deploy/deploy.sh <sha>
+                       → docker compose pull + up -d → espera GET /health (si no responde, el job falla)
+```
+
+| Archivo | Rol |
+|---|---|
+| `deploy/setup-server.sh` | Se ejecuta **una vez** a mano en la VM: instala Docker y Compose, agrega swap, crea `~/ms-plan-nutricional/.env` y la red `nurtricenter_net` |
+| `deploy/deploy.sh` | El script que invoca GitHub Actions por SSH: actualiza la imagen y relanza los contenedores |
+| `deploy/docker-compose.prod.yml` | API + PostgreSQL en el servidor. Usa la imagen publicada (no compila) y la BD no se expone a internet |
+| `scripts/generar_token.py` | Genera un JWT válido para probar la API desplegada sin el api-gateway |
+
+**Secrets de GitHub** (*Settings → Secrets and variables → Actions*):
+
+| Secret | Valor |
+|---|---|
+| `DOCKERHUB_USERNAME` | Usuario de Docker Hub |
+| `DOCKERHUB_TOKEN` | Access Token de Docker Hub (*Account settings → Personal access tokens*) |
+| `SSH_HOST` | IP pública (o DNS) de la instancia EC2 |
+| `SSH_USER` | `ubuntu` |
+| `SSH_PRIVATE_KEY` | Contenido completo del `.pem` del key pair de la instancia |
+
+**Preparar el servidor (una vez):**
+
+1. EC2 con Ubuntu 24.04 (`t3.micro`). Security Group con los puertos 22 (SSH) y 8000 (API) abiertos.
+2. Desde la raíz del repo:
+   ```bash
+   scp -i clave.pem deploy/setup-server.sh ubuntu@<IP>:~
+   ssh -i clave.pem ubuntu@<IP> 'bash setup-server.sh'
+   ```
+3. Cargar los secrets y hacer push a `master`.
+
+**Autenticación.** En el servidor la API corre con `AUTH_HABILITADA=true` y el mismo
+`JWT_SECRET` que el api-gateway. Sin el gateway, el token se genera con:
+
+```bash
+uv run python scripts/generar_token.py --rol admin    # o nutricionista / paciente
+```
+
+Se pega en el botón *Authorize* de `http://<IP>:8000/docs`. `/health` no pide token.
+
+**Integración con el resto de NUR-TRICENTER.** El servicio se une a la red `nurtricenter_net`.
+Si Consul, RabbitMQ y el gateway corren en esa misma red, alcanza con completar `CONSUL_URL` y
+`RABBITMQ_URL` en `~/ms-plan-nutricional/.env` y volver a ejecutar `deploy/deploy.sh`.
+
+---
+
 ## Uso de herramientas de IA
 
 Parte del proyecto se desarrolló con asistencia de **Claude Code**. Las instrucciones,

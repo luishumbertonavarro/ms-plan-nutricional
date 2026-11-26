@@ -54,6 +54,11 @@ igual que `.editorconfig`. No hay formateador: `ruff format` reescribiría ~79 a
 
 - **GitHub Actions** (`.github/workflows/ci.yml`, push/PR a `master`): `uv sync --locked` → `ruff check` →
   `pytest tests/unit --cov --cov-report=xml:coverage.xml` → SonarCloud.
+- **CD** (mismo workflow, solo push a `master`): job `docker` publica `<DOCKERHUB_USERNAME>/ms-plan-nutricional:{latest,<sha>}`
+  → job `deploy` copia `deploy/` por SSH a la EC2 y ejecuta `deploy/deploy.sh <sha> <imagen>`. En el servidor
+  manda `deploy/docker-compose.prod.yml` + `~/ms-plan-nutricional/.env` (creado por `deploy/setup-server.sh`,
+  auth activada). Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`, `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`.
+  Token de prueba sin gateway: `uv run python scripts/generar_token.py --rol admin`.
 - **SonarCloud** (`sonar-project.properties`): org `luishumbertonavarro`, key `luishumbertonavarro_ms-plan-nutricional`.
   Requiere el secret `SONAR_TOKEN` en GitHub y **Automatic Analysis desactivado** en SonarCloud (si no, el scan del CI falla).
 - Para configurar o diagnosticar hooks/CI/Sonar, carga la skill `ci-quality-plan-nutricional`.
