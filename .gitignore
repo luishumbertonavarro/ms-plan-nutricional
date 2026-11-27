@@ -17,8 +17,9 @@ build/
 htmlcov/
 coverage.xml
 
-# Material del video de presentación: solo local, no se versiona.
-video/
+# Material del video de presentación: solo se versiona el video final (el guion queda local).
+video/*
+!video/*.mp4
 
 # Tooling de git hooks (Husky + lint-staged)
 node_modules/
