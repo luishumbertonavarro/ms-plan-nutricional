@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ms-plan-nutricional — NUR-TRICENTER",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
